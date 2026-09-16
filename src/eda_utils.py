@@ -24,11 +24,11 @@ from urllib.parse import quote
 # Localização dos arquivos
 # --------------------------------------------------------------------------- #
 
-_MARCADOR = Path("data") / "goldenset.csv"
+_MARCADOR = Path("data") / "goldenset_offsets.csv"
 
 
 def raiz_projeto(inicio: Path | str | None = None) -> Path:
-    """Sobe a partir de `inicio` até achar a pasta que contém data/goldenset.csv.
+    """Sobe a partir de `inicio` até achar a pasta que contém data/goldenset_offsets.csv.
 
     Permite rodar os notebooks tanto de src/ quanto da raiz do repositório.
     """
@@ -37,7 +37,7 @@ def raiz_projeto(inicio: Path | str | None = None) -> Path:
         if (candidato / _MARCADOR).exists():
             return candidato
     raise FileNotFoundError(
-        "Não encontrei data/goldenset.csv subindo a partir de "
+        "Não encontrei data/goldenset_offsets.csv subindo a partir de "
         f"{atual}. Rode o notebook de dentro do repositório."
     )
 
@@ -84,16 +84,19 @@ _BARRA_N = "\\" + "n"
 
 
 def desescapar(trecho: str) -> str:
-    """O goldenset.csv grava quebra de linha como a sequência literal \\n."""
+    """O goldenset_offsets.csv grava quebra de linha como a sequência literal \\n."""
     return trecho.replace(_BARRA_N, "\n")
 
 
 def carregar_gabarito() -> list[dict]:
-    """Linhas do goldenset.csv, com inicio/fim como int e trecho desescapado.
+    """Linhas do goldenset_offsets.csv, com inicio/fim como int e trecho desescapado.
 
     Acrescenta a chave 'trecho_bruto' com o valor original do arquivo.
     """
-    with open(caminho("data", "goldenset.csv"), encoding="utf-8", newline="") as fh:
+    # utf-8-sig: o arquivo enviado na correção do dataset vem com BOM: abrir
+    # como "utf-8" comum deixaria o BOM grudado no nome da 1a coluna
+    # ("﻿nivel" em vez de "nivel") e quebraria o DictReader inteiro.
+    with open(caminho("data", "goldenset_offsets.csv"), encoding="utf-8-sig", newline="") as fh:
         linhas = list(csv.DictReader(fh))
     for linha in linhas:
         linha["inicio"] = int(linha["inicio"])
