@@ -393,7 +393,7 @@ def limite_entre_citacoes(texto_original, registro_anterior, registro_atual):
         return outro_marcador_jurisprudencia and fim_citacao_anterior
     return False
 
-
+#revisada, mas talvez tenhamos que mexer em algumas heurísticas futuramente
 def agrupar_registros(texto_original, registros):
     grupos = []
     grupo_atual = []
@@ -405,33 +405,28 @@ def agrupar_registros(texto_original, registros):
 
         anterior = grupo_atual[-1]
         distancia = registro["inicio_token"] - anterior["fim_token"] - 1
+        #soma um para incluir as bordas
         tamanho_grupo = registro["fim_token"] - grupo_atual[0]["inicio_token"] + 1
-        marcadores_do_grupo = [
-            item for item in grupo_atual
-            if item["tipo_registro"] == "marcador_principal"
-        ]
+        marcadores_do_grupo = []
+
+        for item in grupo_atual:
+            if item["tipo_registro"] == "marcador_principal":
+                marcadores_do_grupo.append(item)
+
         novo_marcador_distante = False
         if registro["tipo_registro"] == "marcador_principal" and marcadores_do_grupo:
             ultimo_marcador = marcadores_do_grupo[-1]
-            distancia_marcadores = (
-                registro["inicio_token"] - ultimo_marcador["fim_token"] - 1
-            )
-            novo_marcador_distante = (
-                distancia_marcadores > 2
-                and registro.get("categoria") == "jurisprudencia"
-            )
+            distancia_marcadores = (registro["inicio_token"] - ultimo_marcador["fim_token"] - 1)
+            #heurística para quando tem mais de uma citação na mesma frase/parágrafo. Parece boa
+            novo_marcador_distante = (distancia_marcadores > 2 and registro.get("categoria") == "jurisprudencia")
 
-        if (
-            distancia <= 8
-            and tamanho_grupo <= 24
-            and not novo_marcador_distante
-            and not limite_entre_citacoes(texto_original, anterior, registro)
-        ):
+        #outra heurística que talvez precise ser ajustada para generalização
+        if (distancia <= 8 and tamanho_grupo <= 24 and not novo_marcador_distante and not limite_entre_citacoes(texto_original, anterior, registro)):
             grupo_atual.append(registro)
         else:
             grupos.append(grupo_atual)
             grupo_atual = [registro]
-
+    #salva o último grupo
     if grupo_atual:
         grupos.append(grupo_atual)
     return grupos
