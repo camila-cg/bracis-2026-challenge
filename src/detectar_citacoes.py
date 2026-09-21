@@ -21,8 +21,7 @@ documentos = caminho / "txt"
 
 
 # Vocabulário principal, baseado no goldenset.
-#BoW nas citações do gabarito + complementação com IA 
-#Falta referenciar os artigos que o joão mandou
+#BoW nas citações do gabarito + complementação com IA
 MARCADORES_VOCABULARIO = {
     "jurisprudencia": [
         "reclamacao", "recl", "rcl",
@@ -35,7 +34,7 @@ MARCADORES_VOCABULARIO = {
         "habeas corpus", "h c", "hc", "rse", "apl", "rms", "rr", "arr", "ar",
         "embargos de declaracao", "ed", "edcl", "eds",
         "sumula", "sum", "sumula vinculante", "tema", "repercussao geral",
-        "processo", "acordao", "julgado", "precedente",],
+        "processo", "acordao", "julgado", "precedente", "agr"],
     "lei": [ "art", "artigo", "lei", "lei complementar", "codigo",
         "constituicao", "constituicao federal", "constituicao da republica",
         "clt", "cpc", "codigo civil", "processo civil", "processo penal",
@@ -146,7 +145,7 @@ def similaridade(a, b):
     return SequenceMatcher(None, a, b).ratio()
 
 #procura marcador mais parecido no vocabulário
-def encontrar_marcador_parecido(expressao, opcoes, threshold=0.70):
+def encontrar_marcador_parecido(expressao, opcoes, threshold=0.80):
     melhor_opcao = None
     melhor_score = 0
     for opcao in opcoes:
@@ -186,47 +185,45 @@ def procurar_marcadores_principais(tokens):
             continue
 
         marcador_encontrado = None
-        for tamanho in (4, 3, 2, 1):
-            #fim exclusivo
-            fim = indice + tamanho
-            if fim > len(tokens):
-                continue
 
-            expressao = " ".join(token["normalizado"] for token in tokens[indice:fim])
-
-            for categoria, marcadores in MARCADORES_VOCABULARIO.items():
-                marcadores_mesmo_tamanho = [marcador for marcador in marcadores if len(marcador.split()) == tamanho]
-                #expressão exta
-                if expressao in marcadores_mesmo_tamanho:
-                    marcador_encontrado = (categoria, expressao, 1.0, fim - 1)
-                    break
-                #expressão similar
-                marcador, similaridade = encontrar_marcador_parecido( expressao, marcadores_mesmo_tamanho)
-                if marcador is not None:
-                    marcador_encontrado = (categoria, marcador, similaridade, fim - 1)
-                    break
-
-            if marcador_encontrado is not None:
+        #primeiro verificar siglas compostas (tentar resolver o problema do AgR-REspe)
+        partes = set(re.findall(r"[a-z]+", token_atual))
+        tem_hifen = "-" in token_atual
+        tem_sigla = False
+        
+        for parte in partes:
+            if parte in SIGLAS:
+                tem_sigla = True
                 break
+        if tem_hifen and tem_sigla:
+            marcador_encontrado = ("jurisprudencia", token_atual, 1.0, indice)
 
-        #AgR-REsp e similares
+         #agora somente procura no vocabulário se não for uma sigla composta
         if marcador_encontrado is None:
-            token = tokens[indice]["normalizado"]
-            #separa partes por letras
-            partes = set(re.findall(r"[a-z]+", token))
-            tem_hifen = "-" in token
-            tem_sigla = False
+            for tamanho in (4, 3, 2, 1):
+                #fim exclusivo
+                fim = indice + tamanho
+                if fim > len(tokens):
+                    continue
 
-            for parte in partes:
-                if parte in SIGLAS:
-                    tem_sigla = True
+                expressao = " ".join(token["normalizado"] for token in tokens[indice:fim])
+
+                for categoria, marcadores in MARCADORES_VOCABULARIO.items():
+                    marcadores_mesmo_tamanho = [marcador for marcador in marcadores if len(marcador.split()) == tamanho]
+                    #expressão exta
+                    if expressao in marcadores_mesmo_tamanho:
+                        marcador_encontrado = (categoria, expressao, 1.0, fim - 1)
+                        break
+                    #expressão similar
+                    marcador, similaridade = encontrar_marcador_parecido( expressao, marcadores_mesmo_tamanho)
+                    if marcador is not None:
+                        marcador_encontrado = (categoria, marcador, similaridade, fim - 1)
+                        break
+
+                if marcador_encontrado is not None:
                     break
-            if tem_hifen and tem_sigla:
-                marcador_encontrado = ("jurisprudencia", token, 1.0, indice)
-
         if marcador_encontrado is None:
             continue
-
         categoria, marcador, similaridade, fim_indice = marcador_encontrado
         intervalo = (indice, fim_indice)
         if intervalo in intervalos_usados:
