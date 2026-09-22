@@ -96,6 +96,7 @@ class Resolvedor:
         caminho = "acordao_indice"
         if not candidatos:
             candidatos = set(u.resolver_por_numero(trecho, con=self.con))
+            candidatos = ind.filtrar_candidatos(trecho, candidatos, self.acordaos, self.con)
             caminho = "acordao_fts"
         if len(candidatos) == 1:
             return "real", next(iter(candidatos)), caminho

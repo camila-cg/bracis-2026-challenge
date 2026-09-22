@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import unicodedata
 from datetime import datetime, timezone
 
 import eda_utils as u
@@ -297,9 +298,70 @@ _NAO_ALFANUM = re.compile(r"[^a-z0-9]")
 
 
 def _normalizar_para_comparar(s: str) -> str:
-    import unicodedata
     sem_acento = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
     return _NAO_ALFANUM.sub("", sem_acento.lower())
+
+
+TRIBUNAL_CITADO = re.compile(r"\b(?:STF|STJ|TSE|TST|STM)\b", re.I)
+UF_CITADA = re.compile(r"(?:/|\s-\s|\(\s*)([A-Z]{2})(?=\b|\s*\))", re.I)
+CLASSES_CITADAS = (
+    (re.compile(r"\b(?:ARESP|AGRAVO\s+(?:EM|NO)\s+RECURSO\s+ESPECIAL)\b", re.I), "agravoemrecursoespecial"),
+    (re.compile(r"\b(?:RESP|RECURSO\s+ESPECIAL)\b", re.I), "recursoespecial"),
+    (re.compile(r"\b(?:ARE|RECURSO\s+EXTRAORDINARIO\s+COM\s+AGRAVO)\b", re.I), "recursoextraordinariocomagravo"),
+    (re.compile(r"\b(?:RE|RECURSO\s+EXTRAORDINARIO)\b", re.I), "recursoextraordinario"),
+    (re.compile(r"\b(?:RCL|RECLAMACAO)\b", re.I), "reclamacao"),
+    (re.compile(r"\b(?:RHC|RECURSO\s+EM\s+HABEAS\s+CORPUS)\b", re.I), "recursoemhabeascorpus"),
+    (re.compile(r"\b(?:HC|HABEAS\s+CORPUS)\b", re.I), "habeascorpus"),
+    (re.compile(r"\b(?:RSE|RECURSO\s+EM\s+SENTIDO\s+ESTRITO)\b", re.I), "recursoemsentidoestrito"),
+    (re.compile(r"\b(?:APL|APELACAO)\b", re.I), "apelacao"),
+)
+
+
+def _classe_citada(trecho: str) -> str | None:
+    sem_acento = unicodedata.normalize("NFKD", trecho).encode("ascii", "ignore").decode()
+    for padrao, classe in CLASSES_CITADAS:
+        if padrao.search(sem_acento):
+            return classe
+    return None
+
+
+def _compativel(trecho: str, tribunal: str, classe: str, uf: str | None) -> bool:
+    tribunal_citado = TRIBUNAL_CITADO.search(trecho)
+    if tribunal_citado and tribunal_citado.group().upper() != tribunal:
+        return False
+    uf_citada = UF_CITADA.search(trecho)
+    if uf_citada and uf and uf_citada.group(1).upper() != uf:
+        return False
+    classe_citada = _classe_citada(trecho)
+    classe_registro = _classe_citada(classe)
+    if classe_citada and classe_registro and classe_citada != classe_registro:
+        return False
+    return True
+
+
+def filtrar_candidatos(trecho: str, candidatos: set[int], indice_acordaos: dict,
+                       con: sqlite3.Connection | None = None) -> set[int]:
+    """Descarta registros incompatíveis com identificadores explícitos na citação."""
+    metadados = {
+        r["id"]: (tribunal, r["classe"], r["uf"])
+        for (tribunal, _classe, _numero, _origem), registros in indice_acordaos.items()
+        for r in registros if r["id"] in candidatos
+    }
+    if con and len(metadados) < len(candidatos):
+        faltantes = candidatos - metadados.keys()
+        for id_canonico, tribunal, texto in con.execute(
+            f"SELECT id, tribunal, texto FROM documentos WHERE id IN ({','.join('?' for _ in faltantes)})",
+            tuple(faltantes),
+        ):
+            campos = parsear_cabecalho(tribunal, texto)
+            metadados[id_canonico] = (
+                tribunal, campos["classe"] if campos else "",
+                normalizar_uf(campos["uf"]) if campos else None,
+            )
+    return {
+        id_canonico for id_canonico in candidatos
+        if id_canonico not in metadados or _compativel(trecho, *metadados[id_canonico])
+    }
 
 
 def indice_por_numero(indice_acordaos: dict) -> dict[str, list[dict]]:
@@ -323,9 +385,15 @@ def resolver(trecho: str, indice_acordaos: dict) -> set[int]:
     desempate, vazio quando o número não bate com nada do índice.
     """
     por_numero = indice_por_numero(indice_acordaos)
+    tribunal_por_id = {
+        r["id"]: tribunal
+        for (tribunal, _classe, _numero, _origem), registros in indice_acordaos.items()
+        for r in registros
+    }
     for forma in u.variantes_numero(trecho):
         chave = normalizar_numero(forma) if u.CNJ.search(forma) else re.sub(r"[^0-9]", "", forma)
-        registros = por_numero.get(chave)
+        registros = [r for r in por_numero.get(chave, []) if _compativel(
+            trecho, tribunal_por_id[r["id"]], r["classe"], r["uf"])]
         if not registros:
             continue
         candidatos = {r["id"] for r in registros}
