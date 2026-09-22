@@ -56,7 +56,7 @@ def ler_texto(arquivo: Path) -> str:
 
 def processar_documento(documento_id: str, texto: str, resolvedor: Resolvedor) -> dict:
     candidatos = extrair(texto)                                        # 1
-    candidatos = filtrar_distratores(candidatos)                       # 2
+    candidatos = filtrar_distratores(candidatos, texto)                # 2
     citacoes = []
     for candidato in candidatos:
         rota = rotear(candidato)                                       # 3
