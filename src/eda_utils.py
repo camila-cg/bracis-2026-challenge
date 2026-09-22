@@ -20,6 +20,8 @@ import sqlite3
 from pathlib import Path
 from urllib.parse import quote
 
+from configuracao import carregar_config
+
 # --------------------------------------------------------------------------- #
 # Localização dos arquivos
 # --------------------------------------------------------------------------- #
@@ -170,18 +172,10 @@ NUMERO_LIVRE = re.compile(r"\d[\d.\s]{2,}\d|\d{3,}")
 # dígito (21737l8, 1.528.4S5, 1.45g.779, 170076O). O mapa só deve ser aplicado
 # DENTRO do token numérico: aplicá-lo ao trecho inteiro destrói a sigla da
 # classe processual ("RESP" viraria "RE5P").
-OCR_PARA_DIGITO = {
-    "l": "1", "I": "1", "i": "1", "|": "1",
-    "O": "0", "o": "0", "D": "0",
-    "S": "5", "s": "5",
-    "g": "9", "q": "9",
-    "B": "8",
-    "Z": "2", "z": "2",
-    "G": "6", "b": "6",
-    "T": "7",
-}
+OCR_PARA_DIGITO = carregar_config("regras_ocr")["letra_para_digito"]
 
-_TOKEN_NUMERICO = re.compile(r"[0-9][0-9OoSslIigqBZzGbTD.\s-]*[0-9OoSslIigqBZzGbTD]")
+_LETRAS_OCR = re.escape("".join(letra for letra in OCR_PARA_DIGITO if letra != "|"))
+_TOKEN_NUMERICO = re.compile(rf"[0-9][0-9{_LETRAS_OCR}.\s-]*[0-9{_LETRAS_OCR}]")
 
 
 def corrigir_ocr_em_numeros(texto: str) -> str:
