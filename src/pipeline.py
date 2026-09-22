@@ -7,8 +7,8 @@ Etapas, na ordem em que cada citação passa por elas (uma por módulo em src/st
       1. extrair               txt -> candidatos a citação (detectar_citacoes)
       2. filtrar_distratores   descarta R$, fls., OAB, autos do próprio processo
       3. rotear                decide o tipo: lei, súmula, tema, descritiva, acórdão
-      4. normalizar            corrige OCR e reescreve números na forma do índice
-      5. resolver              busca na base canônica -> classe + id_canonico
+      4. normalizar            extrai atributos e corrige OCR em CitacaoNormalizada
+      5. resolver              consulta por atributos -> ResultadoResolucao
       6. atribuir_confianca    confiança pelo caminho de decisão da etapa 5
 
     Para o conjunto (main):
@@ -40,8 +40,8 @@ from steps.pipeline_utils import DADOS, RAIZ
 from steps.extrair_candidatos import extrair                  # 1
 from steps.filtrar_distratores import filtrar_distratores     # 2
 from steps.rotear_citacao import rotear                       # 3
-from steps.normalizar_numeros import normalizar               # 4
-from steps.buscar_na_base import Resolvedor, resolver         # 5
+from steps.normalizar_citacao import normalizar_citacao        # 4
+from steps.buscar_na_base import Resolvedor                    # 5
 from steps.atribuir_confianca import atribuir_confianca       # 6
 from steps.salvar_submissao import gravar_saida               # 7
 from steps.avaliar_metrica import avaliar, imprimir_avaliacao
@@ -60,18 +60,20 @@ def processar_documento(documento_id: str, texto: str, resolvedor: Resolvedor) -
     citacoes = []
     for candidato in candidatos:
         rota = rotear(candidato)                                       # 3
-        trecho = normalizar(candidato["trecho"], rota)                 # 4
-        classe, id_canonico, caminho = resolver(rota, trecho, resolvedor)  # 5
-        confianca = atribuir_confianca(caminho)                        # 6
+        citacao = normalizar_citacao(candidato, rota)                   # 4
+        resultado = resolvedor.resolver_citacao(citacao)               # 5
+        confianca = atribuir_confianca(resultado.caminho)             # 6
         citacoes.append({
             "inicio": candidato["inicio"],
             "fim": candidato["fim"],
             "trecho": candidato["trecho"],
             "tipo": candidato["tipo"],
-            "classificacao": classe,
-            "resolucao": {"id_canonico": str(id_canonico)} if id_canonico is not None else None,
+            "classificacao": resultado.classe,
+            "resolucao": {"id_canonico": str(resultado.id_canonico)} if resultado.id_canonico is not None else None,
             "confianca": confianca,
-            "caminho": caminho,
+            "caminho": resultado.caminho,
+            "cobertura": resultado.cobertura,
+            "motivo": resultado.motivo,
         })
     return {"documento_id": documento_id, "citacoes": citacoes}
 

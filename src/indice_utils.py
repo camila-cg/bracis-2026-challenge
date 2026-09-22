@@ -232,12 +232,13 @@ SUMULA_SEM_NUMERO_NO_TEXTO = {
 
 
 def construir_indice_normativos(con: sqlite3.Connection) -> tuple[dict, list[dict]]:
-    """Índice "lei|<estatuto>|<artigo>" e "sumula|<tribunal>|<número>" -> id.
+    """Índice "lei|<estatuto>|<artigo>" e "sumula|<tribunal>|<número>" -> registros.
 
     Aqui a chave é semântica, não posicional: não existe cabeçalho nesses
-    registros, o alvo é o próprio enunciado.
+    registros, o alvo é o próprio enunciado. Preserva colisões para que uma
+    chave com mais de um ID seja classificada como incompleta.
     """
-    indice: dict[str, dict] = {}
+    indice: dict[str, list[dict]] = {}
     sem_resolucao = []
     cur = con.execute(
         "SELECT documento_id, id, natureza, texto FROM documentos WHERE natureza IN ('sumula','dispositivo')"
@@ -264,7 +265,7 @@ def construir_indice_normativos(con: sqlite3.Connection) -> tuple[dict, list[dic
                 sem_resolucao.append({"documento_id": documento_id, "id": id_canonico, "natureza": natureza})
                 continue
             chave = f"sumula|{tribunal}|{numero}"
-        indice[chave] = {"id": id_canonico, "documento_id": documento_id}
+        indice.setdefault(chave, []).append({"id": id_canonico, "documento_id": documento_id})
     return indice, sem_resolucao
 
 

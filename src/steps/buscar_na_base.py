@@ -2,42 +2,13 @@
 
 from __future__ import annotations
 
-import re
 import sqlite3
 
 import eda_utils as u
 import indice_utils as ind
-from configuracao import carregar_config
-from steps.pipeline_utils import BLOCO_NUMERICO, corrigir_ocr, tem_identificador
-from steps.rotear_citacao import E_SUMULA, ROTA_ACORDAO, ROTA_DESCRITIVA, ROTA_LEI, ROTA_SUMULA, ROTA_TEMA
-
-E_VINCULANTE = re.compile(r"vincul", re.I)
-TRIBUNAL = re.compile(r"\b(" + "|".join(map(re.escape, carregar_config("tribunais")["siglas"])) + r")\b", re.I)
-LEI_NUMERADA = re.compile(r"\blei\s*(?:n\s*[º°o.]?\s*)?\d[\d.]*(?:/\d{2,4})?", re.I)
-
-# Estatuto citado -> nome usado em indice_utils.ESTATUTO_POR_ID.
-APELIDOS_ESTATUTO = carregar_config("diplomas")["apelidos_estatuto"]
-
-
-def estatuto_citado(trecho: str) -> str | None:
-    t = re.sub(r"\s+", " ", trecho.lower())
-    for nome, chaves in APELIDOS_ESTATUTO.items():
-        if any(k in t for k in chaves):
-            return nome
-    return None
-
-
-def numero_apos(trecho: str, palavra: re.Pattern) -> str | None:
-    """Número que segue a palavra-chave (súmula, tema), com OCR corrigido.
-
-    Procurar depois da palavra evita pegar o "5" de "5úmula".
-    """
-    m = palavra.search(trecho)
-    resto = corrigir_ocr(trecho[m.end():] if m else trecho)
-    bloco = BLOCO_NUMERICO.search(resto)
-    if not bloco:
-        return None
-    return re.sub(r"\D", "", bloco.group(0)).lstrip("0") or None
+from modelos import CitacaoNormalizada, ResultadoResolucao
+from steps.normalizar_citacao import normalizar_citacao
+from steps.rotear_citacao import ROTA_ACORDAO, ROTA_DESCRITIVA, ROTA_LEI, ROTA_SUMULA, ROTA_TEMA
 
 
 class Resolvedor:
@@ -47,57 +18,134 @@ class Resolvedor:
         self.con = con
         self.acordaos, _ = ind.construir_indice_acordaos(con)
         self.normativos, _ = ind.construir_indice_normativos(con)
+        self.acordaos_por_numero = ind.indice_por_numero(self.acordaos)
+        self.metadados_por_id = {
+            registro["id"]: (tribunal, registro["classe"], registro["uf"])
+            for (tribunal, _classe, _numero, _origem), registros in self.acordaos.items()
+            for registro in registros
+        }
 
-    def lei(self, trecho: str) -> tuple[str, int | None, str]:
-        m = re.search(r"art(?:igo)?\.?\s*(\d[\d.]*)", trecho, re.I)
-        if not m:
-            return "incompleta", None, "lei_sem_artigo"
-        artigo = m.group(1).replace(".", "")
-        estatuto = estatuto_citado(trecho)
-        if not estatuto and not LEI_NUMERADA.search(trecho):
-            return "incompleta", None, "lei_sem_estatuto"
-        alvo = self.normativos.get(f"lei|{estatuto}|{artigo}") if estatuto else None
-        if alvo:
-            return "real", alvo["id"], "lei_real"
-        return "inventada", None, "lei_inventada"
+    def resolver_citacao(self, citacao: CitacaoNormalizada) -> ResultadoResolucao:
+        """Decide a classificação a partir dos atributos extraídos."""
+        if citacao.familia == ROTA_LEI:
+            if not citacao.artigo:
+                return ResultadoResolucao("incompleta", None, "lei_sem_artigo", cobertura="nao_consultada", motivo="artigo_ausente")
+            if not citacao.diploma:
+                if citacao.lei_numerada:
+                    # Convenção do desafio: lei numerada fora do catálogo congelado.
+                    return ResultadoResolucao("inventada", None, "lei_inventada", cobertura="fora_base", motivo="lei_numerada_sem_mapeamento")
+                return ResultadoResolucao("incompleta", None, "lei_sem_estatuto", cobertura="nao_consultada", motivo="diploma_ausente")
+            alvo = self.normativos.get(f"lei|{citacao.diploma}|{citacao.artigo}")
+            return self._resultado_normativo(alvo, "lei")
 
-    def sumula(self, trecho: str) -> tuple[str, int | None, str]:
-        numero = numero_apos(trecho, E_SUMULA)
-        if not numero:
-            return "incompleta", None, "sumula_sem_numero"
-        if E_VINCULANTE.search(trecho):
-            chave = f"sumula|STF|VINCULANTE-{numero}"
-        else:
-            m = TRIBUNAL.search(u.corrigir_ocr_em_numeros(trecho).upper())
-            if not m:
-                return "incompleta", None, "sumula_sem_tribunal"
-            chave = f"sumula|{m.group(1)}|{numero}"
-        alvo = self.normativos.get(chave)
-        if alvo:
-            return "real", alvo["id"], "sumula_real"
-        return "inventada", None, "sumula_inventada"
+        if citacao.familia == ROTA_SUMULA:
+            if not citacao.numero:
+                return ResultadoResolucao("incompleta", None, "sumula_sem_numero", cobertura="nao_consultada", motivo="numero_ausente")
+            tribunal = "STF" if citacao.vinculante else citacao.tribunal
+            if not tribunal:
+                return ResultadoResolucao("incompleta", None, "sumula_sem_tribunal", cobertura="nao_consultada", motivo="tribunal_ausente")
+            numero = f"VINCULANTE-{citacao.numero}" if citacao.vinculante else citacao.numero
+            alvo = self.normativos.get(f"sumula|{tribunal}|{numero}")
+            return self._resultado_normativo(alvo, "sumula")
 
-    def tema(self, trecho: str) -> tuple[str, int | None, str]:
-        # Não há tema de repercussão geral na base: com número, não resolve.
-        return ("inventada" if tem_identificador(trecho) else "incompleta"), None, "tema"
+        if citacao.familia == ROTA_TEMA:
+            if not citacao.numero or not citacao.identificador_suficiente:
+                return ResultadoResolucao("incompleta", None, "tema", cobertura="nao_consultada", motivo="numero_ausente")
+            return ResultadoResolucao("inventada", None, "tema", cobertura="fora_base", motivo="tema_nao_indexado")
 
-    def descritiva(self, trecho: str) -> tuple[str, int | None, str]:
-        # Buscável, mas sem número não há como desempatar.
-        return "incompleta", None, "descritiva"
+        if citacao.familia == ROTA_DESCRITIVA or not citacao.numero:
+            return ResultadoResolucao("incompleta", None, "descritiva", cobertura="nao_consultada", motivo="numero_ausente")
 
-    def acordao(self, trecho: str) -> tuple[str, int | None, str]:
-        """Espera o trecho já normalizado (etapa 4)."""
-        candidatos = ind.resolver(trecho, self.acordaos)
+        candidatos = self._buscar_acordaos(citacao)
         caminho = "acordao_indice"
         if not candidatos:
-            candidatos = set(u.resolver_por_numero(trecho, con=self.con))
-            candidatos = ind.filtrar_candidatos(trecho, candidatos, self.acordaos, self.con)
+            candidatos = set(u.resolver_por_numero(citacao.normalizado, con=self.con))
+            candidatos = self._filtrar_ids(citacao, candidatos)
             caminho = "acordao_fts"
         if len(candidatos) == 1:
-            return "real", next(iter(candidatos)), caminho
+            return ResultadoResolucao("real", next(iter(candidatos)), caminho, tuple(sorted(candidatos)))
         if not candidatos:
-            return "inventada", None, "acordao_zero"
-        return "incompleta", None, "acordao_ambigua"
+            return ResultadoResolucao("inventada", None, "acordao_zero")
+        return ResultadoResolucao("incompleta", None, "acordao_ambigua", tuple(sorted(candidatos)), motivo="multiplos_registros")
+
+    @staticmethod
+    def _resultado_normativo(alvos: list[dict] | None, familia: str) -> ResultadoResolucao:
+        ids = tuple(sorted({item["id"] for item in alvos or []}))
+        if len(ids) == 1:
+            return ResultadoResolucao("real", ids[0], f"{familia}_real", ids)
+        if ids:
+            return ResultadoResolucao("incompleta", None, f"{familia}_ambigua", ids, motivo="multiplos_registros")
+        return ResultadoResolucao("inventada", None, f"{familia}_inventada")
+
+    def _buscar_acordaos(self, citacao: CitacaoNormalizada) -> set[int]:
+        registros = self.acordaos_por_numero.get(citacao.numero or "", [])
+        compativeis = []
+        for registro in registros:
+            if self._compativel(citacao, self.metadados_por_id[registro["id"]]):
+                compativeis.append(registro)
+        ids = {registro["id"] for registro in compativeis}
+        if len(ids) <= 1:
+            return ids
+        trecho_norm = ind._normalizar_para_comparar(citacao.normalizado)
+        batidas = {
+            registro["id"] for registro in compativeis
+            if ind._normalizar_para_comparar(registro["classe"])
+            and ind._normalizar_para_comparar(registro["classe"]) in trecho_norm
+        }
+        return batidas if len(batidas) == 1 else ids
+
+    @staticmethod
+    def _compativel(citacao: CitacaoNormalizada, metadados: tuple[str, str, str | None]) -> bool:
+        tribunal, classe, uf = metadados
+        classe_registro = ind._classe_citada(classe)
+        return (
+            (not citacao.tribunal or citacao.tribunal == tribunal)
+            and (not citacao.uf or not uf or citacao.uf == uf)
+            and (not citacao.classe or not classe_registro or citacao.classe == classe_registro)
+        )
+
+    def _filtrar_ids(self, citacao: CitacaoNormalizada, ids: set[int]) -> set[int]:
+        ausentes = ids - self.metadados_por_id.keys()
+        if ausentes:
+            placeholders = ",".join("?" for _ in ausentes)
+            for id_canonico, tribunal, texto in self.con.execute(
+                f"SELECT id, tribunal, texto FROM documentos WHERE id IN ({placeholders})", tuple(ausentes)
+            ):
+                campos = ind.parsear_cabecalho(tribunal, texto)
+                self.metadados_por_id[id_canonico] = (
+                    tribunal, campos["classe"] if campos else "",
+                    ind.normalizar_uf(campos["uf"]) if campos else None,
+                )
+        return {
+            id_canonico for id_canonico in ids
+            if id_canonico not in self.metadados_por_id
+            or self._compativel(citacao, self.metadados_por_id[id_canonico])
+        }
+
+    def lei(self, trecho: str) -> tuple[str, int | None, str]:
+        c = normalizar_citacao({"trecho": trecho, "inicio": 0, "fim": len(trecho)}, ROTA_LEI)
+        r = self.resolver_citacao(c)
+        return r.classe, r.id_canonico, r.caminho
+
+    def sumula(self, trecho: str) -> tuple[str, int | None, str]:
+        c = normalizar_citacao({"trecho": trecho, "inicio": 0, "fim": len(trecho)}, ROTA_SUMULA)
+        r = self.resolver_citacao(c)
+        return r.classe, r.id_canonico, r.caminho
+
+    def tema(self, trecho: str) -> tuple[str, int | None, str]:
+        c = normalizar_citacao({"trecho": trecho, "inicio": 0, "fim": len(trecho)}, ROTA_TEMA)
+        r = self.resolver_citacao(c)
+        return r.classe, r.id_canonico, r.caminho
+
+    def descritiva(self, trecho: str) -> tuple[str, int | None, str]:
+        c = normalizar_citacao({"trecho": trecho, "inicio": 0, "fim": len(trecho)}, ROTA_DESCRITIVA)
+        r = self.resolver_citacao(c)
+        return r.classe, r.id_canonico, r.caminho
+
+    def acordao(self, trecho: str) -> tuple[str, int | None, str]:
+        c = normalizar_citacao({"trecho": trecho, "inicio": 0, "fim": len(trecho)}, ROTA_ACORDAO, ja_normalizado=True)
+        r = self.resolver_citacao(c)
+        return r.classe, r.id_canonico, r.caminho
 
 
 def resolver(rota: str, trecho: str, resolvedor: Resolvedor) -> tuple[str, int | None, str]:
