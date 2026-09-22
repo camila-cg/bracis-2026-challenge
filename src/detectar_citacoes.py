@@ -431,19 +431,16 @@ def agrupar_registros(texto_original, registros):
         grupos.append(grupo_atual)
     return grupos
 
-
+#define a categoria dos registros - ok
 def escolher_categoria(grupo):
-    marcadores_principais = [
-        registro for registro in grupo
-        if registro["tipo_registro"] == "marcador_principal"
-    ]
+    marcadores_principais = [ registro for registro in grupo
+        if registro["tipo_registro"] == "marcador_principal"]
     if not marcadores_principais:
         return None
 
     marcadores_lei = {
         registro["marcador"] for registro in marcadores_principais
-        if registro["categoria"] == "lei"
-    }
+        if registro["categoria"] == "lei"}
     if marcadores_lei & MARCADORES_LEGAIS_NUMERADOS:
         return "lei"
 
@@ -452,46 +449,43 @@ def escolher_categoria(grupo):
         pontos_por_categoria[registro["categoria"]] += registro["pontos"]
     return max(pontos_por_categoria, key=pontos_por_categoria.get)
 
-
+#verifica se um grupo tem registros suficientes para poder ser considerado citação - ok, mas teve que ser ajustada
 def grupo_atende_regras(grupo, categoria):
     marcadores_principais = [
         registro for registro in grupo
         if registro["tipo_registro"] == "marcador_principal"
-        and registro["categoria"] == categoria
-    ]
+        and registro["categoria"] == categoria]
     marcadores = {
-        registro["marcador"] for registro in marcadores_principais
-    }
+        registro["marcador"] for registro in marcadores_principais}
     tipos = {registro["tipo_registro"] for registro in grupo}
 
     if categoria == "lei":
-        tem_marcador_legal_numerado = bool(
-            marcadores & MARCADORES_LEGAIS_NUMERADOS
-        )
+        tem_marcador_legal_numerado = bool(marcadores & MARCADORES_LEGAIS_NUMERADOS)
         tem_numero = bool(tipos & {"numero_legal", "numero_processual"})
 
         return tem_marcador_legal_numerado and tem_numero
 
     tem_numero_processual = "numero_processual" in tipos
     tem_algum_numero = bool(tipos & {"numero_processual", "numero_legal"})
-    fragmentos_numericos = sum(
-        registro["tipo_registro"] == "numero_legal"
-        for registro in grupo
-    )
-    tem_descricao_completa = (
-        "ano" in tipos
-        and bool(tipos & {"relatoria", "nome_proprio"})
-    )
+    fragmentos_numericos = sum(registro["tipo_registro"] == "numero_legal" for registro in grupo)
+    quantidade_indicios_descritivos = 0
+
+    if "tribunal" in tipos:
+        quantidade_indicios_descritivos += 1
+    if "ano" in tipos:
+        quantidade_indicios_descritivos += 1
+    if "relatoria" in tipos:
+        quantidade_indicios_descritivos += 1
+    if "nome_proprio" in tipos:
+        quantidade_indicios_descritivos += 1
+
+    tem_descricao_identificavel = (quantidade_indicios_descritivos >= 2)
 
     if marcadores & MARCADORES_NUMERADOS:
         return tem_algum_numero
-    return (
-        tem_numero_processual
-        or fragmentos_numericos >= 2
-        or tem_descricao_completa
-    )
+    return (tem_numero_processual or fragmentos_numericos >= 2 or tem_descricao_identificavel)
 
-
+#ajustada, pontua os grupos para depois saber se vamos considerar como citação
 def pontuar_grupo(grupo, categoria):
     pontos = 0
     registros_contados = set()
@@ -500,9 +494,7 @@ def pontuar_grupo(grupo, categoria):
         if registro["tipo_registro"] == "marcador_principal":
             if registro["categoria"] != categoria:
                 continue
-        elif categoria == "lei" and registro["tipo_registro"] in {
-            "tribunal", "uf", "relatoria", "nome_proprio"
-        }:
+        elif categoria == "lei" and registro["tipo_registro"] in {"tribunal", "relatoria"}:
             continue
 
         chave = (
@@ -517,7 +509,7 @@ def pontuar_grupo(grupo, categoria):
 
     return pontos
 
-
+# revisada
 def formar_candidatos(texto_original, tokens, grupos):
     candidatos = []
 
@@ -529,8 +521,8 @@ def formar_candidatos(texto_original, tokens, grupos):
         registros_categoria = [
             registro for registro in grupo
             if registro["tipo_registro"] != "marcador_principal"
-            or registro["categoria"] == categoria
-        ]
+            or registro["categoria"] == categoria]
+        
         inicio = min(registro["inicio"] for registro in registros_categoria)
         fim = max(registro["fim"] for registro in registros_categoria)
         pontos = pontuar_grupo(registros_categoria, categoria)
@@ -542,18 +534,16 @@ def formar_candidatos(texto_original, tokens, grupos):
             "trecho": texto_original[inicio:fim],
             "pontuacao": pontos,
             "registros": [
-                {
-                    "tipo": registro["tipo_registro"],
+                {"tipo": registro["tipo_registro"],
                     "valor": registro.get("marcador", registro.get("valor")),
-                    "pontos": registro["pontos"],
-                }
+                    "pontos": registro["pontos"],}
                 for registro in registros_categoria
             ],
         })
 
     return candidatos
 
-
+#mede o quanto do o span detectado coincide com o goldenset
 def calcular_sobreposicao(candidato, anotacao):
     inicio = max(candidato["inicio"], int(anotacao["inicio"]))
     fim = min(candidato["fim"], int(anotacao["fim"]))
@@ -561,13 +551,10 @@ def calcular_sobreposicao(candidato, anotacao):
     if intersecao == 0:
         return 0
 
-    uniao = (
-        max(candidato["fim"], int(anotacao["fim"]))
-        - min(candidato["inicio"], int(anotacao["inicio"]))
-    )
+    uniao = (max(candidato["fim"], int(anotacao["fim"])) - min(candidato["inicio"], int(anotacao["inicio"])))
     return intersecao / uniao
 
-
+#funcao para verificar se acertou a detecção do span
 def avaliar_documento(candidatos, anotacoes):
     candidatos_usados = set()
     correspondencias = []
@@ -627,7 +614,7 @@ def avaliar_documento(candidatos, anotacoes):
         },
     }
 
-
+#avalia o conjunto do goldenset
 def avaliar_conjunto(candidatos_por_documento, anotacoes_por_documento, threshold):
     total_candidatos = 0
     verdadeiros_positivos = 0
@@ -668,7 +655,7 @@ def avaliar_conjunto(candidatos_por_documento, anotacoes_por_documento, threshol
         "f1": round(f1, 4),
     }
 
-
+# escolhe o threshold com base nos resultados no goldenset
 def escolher_threshold(candidatos_por_documento, anotacoes_por_documento):
     thresholds = sorted({
         candidato["pontuacao"]
@@ -707,16 +694,12 @@ def ler_anotacoes(caminho=goldenset):
         return list(csv.DictReader(arquivo))
 
 
-def analisar_documentos(
-    caminho_goldenset=goldenset,
-    pasta_documentos=documentos,
-):
+def analisar_documentos(caminho_goldenset=goldenset, pasta_documentos=documentos,):
     anotacoes = ler_anotacoes(caminho_goldenset)
     anotacoes_por_documento = {}
     for anotacao in anotacoes:
         anotacoes_por_documento.setdefault(
-            anotacao["documento_id"], []
-        ).append(anotacao)
+            anotacao["documento_id"], []).append(anotacao)
 
     candidatos_por_documento = {}
     for documento_id in sorted(anotacoes_por_documento):
@@ -726,12 +709,9 @@ def analisar_documentos(
         registros = detectar_marcadores_e_indicios(texto_original, tokens)
         grupos = agrupar_registros(texto_original, registros)
         candidatos_por_documento[documento_id] = formar_candidatos(
-            texto_original, tokens, grupos
-        )
+            texto_original, tokens, grupos)
 
-    threshold, treinamento = escolher_threshold(
-        candidatos_por_documento, anotacoes_por_documento
-    )
+    threshold, treinamento = escolher_threshold( candidatos_por_documento, anotacoes_por_documento)
 
     documentos = []
     falsos_positivos_por_documento = []
@@ -747,8 +727,7 @@ def analisar_documentos(
         indices_correspondentes = avaliacao.pop("indices_correspondentes")
         falsos_positivos = [
             candidato for indice, candidato in enumerate(candidatos)
-            if indice not in indices_correspondentes
-        ]
+            if indice not in indices_correspondentes]
 
         documentos.append({
             "documento_id": documento_id,
@@ -763,8 +742,7 @@ def analisar_documentos(
             })
 
     treinamento["falsos_positivos_por_documento"] = (
-        falsos_positivos_por_documento
-    )
+        falsos_positivos_por_documento)
     return {
         "treinamento_threshold": treinamento,
         "documentos": documentos,
