@@ -1,6 +1,5 @@
 {
   "pontuacao_minima": 4,
-  "limite_cabecalho": 400,
   "distancia_maxima_grupo": 8,
   "tamanho_maximo_grupo": 24,
   "distancia_marcadores_jurisprudencia": 2,
