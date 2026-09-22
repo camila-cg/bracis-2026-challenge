@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 import eda_utils as u
+from configuracao import carregar_config
 
 RAIZ = Path(__file__).resolve().parents[2]
 DADOS = RAIZ / "data"
@@ -25,7 +26,7 @@ ANO_SOLTO = re.compile(r"\b(?:de|em)\s+(?:19|20)\d{2}\b", re.I)
 
 # Letra no lugar de dígito, só quando colada a um dígito ("21737l8", "6G.838",
 # "170076O"). Exigir o dígito vizinho é o que impede o "S" de "- SP" de virar 5.
-OCR_LETRA = "OoSslIigqBZzGbTD"
+OCR_LETRA = re.escape("".join(letra for letra in carregar_config("regras_ocr")["letra_para_digito"] if letra != "|"))
 LETRA_EM_NUMERO = re.compile(rf"(?<=\d)[{OCR_LETRA}]|(?<=\d\.)[{OCR_LETRA}]|[{OCR_LETRA}](?=\d)")
 
 # Bloco numérico: dígitos separados por qualquer mistura de ponto, espaço,

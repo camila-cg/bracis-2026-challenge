@@ -1,0 +1,34 @@
+{
+  "marcadores_lei": [
+    "art", "artigo", "lei", "lei complementar", "codigo", "constituicao",
+    "constituicao federal", "constituicao da republica", "clt", "cpc", "codigo civil",
+    "processo civil", "processo penal", "defesa do consumidor", "codigo penal",
+    "penal militar", "codigo eleitoral", "consolidacao das leis do trabalho", "§"
+  ],
+  "marcadores_numerados": ["art", "artigo", "§", "lei", "lei complementar"],
+  "termos_relatoria": ["rel", "relator", "relatora", "relatoria", "min", "ministro", "ministra"],
+  "composicao_nome": ["da", "das", "de", "do", "dos", "e"],
+  "apelidos_estatuto": {
+    "Constituição": ["constitui", "cf/88", "carta magna", "cf/1988"],
+    "CLT": ["clt", "consolidação das leis do trabalho", "consolidacao das leis do trabalho", "5.452"],
+    "Código de Processo Civil": ["cpc", "processo civil", "13.105"],
+    "Código de Processo Penal": ["cpp", "processo penal", "3.689"],
+    "Código Penal Militar": ["cpm", "penal militar", "1.001"],
+    "Código Civil": ["código civil", "codigo civil", "10.406"],
+    "Código de Defesa do Consumidor": ["cdc", "defesa do consumidor", "8.078"],
+    "Código Eleitoral": ["código eleitoral", "codigo eleitoral", "4.737"],
+    "Lei Complementar nº 64/1990": ["complementar nº 64", "complementar n. 64", "complementar 64", "lc 64", "lc nº 64", "64/1990", "64/90"]
+  },
+  "estatuto_por_id": {
+    "10577194": "Código Eleitoral", "10590194": "Código Penal Militar",
+    "10606184": "Código de Defesa do Consumidor", "10626510": "Constituição",
+    "10637358": "CLT", "10641213": "Constituição", "10641516": "Constituição",
+    "10647746": "CLT", "10652044": "Código de Processo Penal", "10710324": "CLT",
+    "10718759": "Código Civil", "11304039": "Lei Complementar nº 64/1990",
+    "28893055": "Código de Processo Civil"
+  },
+  "sumula_sem_numero_no_texto": {
+    "1289712966": ["STF", "VINCULANTE-10"],
+    "1431369957": ["TST", "331"]
+  }
+}

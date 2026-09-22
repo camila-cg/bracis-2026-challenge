@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import detectar_citacoes as dc
+from configuracao import carregar_config
 
 # Pontuação mínima do candidato no extrator. 4 é o piso: recupera todas as
 # citações do dev set, e o que entra de lixo é distrator, tratado na etapa 2.
-PONTUACAO_MINIMA = 4
+PONTUACAO_MINIMA = carregar_config("pipeline")["pontuacao_minima"]
 
 
 def extrair(texto: str) -> list[dict]:

@@ -1,0 +1,26 @@
+{
+  "marcadores_jurisprudencia": [
+    "reclamacao", "recl", "rcl", "recurso", "recurso especial", "re", "resp", "aresp", "agresp",
+    "recurso em mandado", "recurso em mandado de seguranca", "recurso em habeas corpus",
+    "rhc", "respe", "rec esp", "r esp", "agravo interno", "agint", "agravo regimental",
+    "agrg", "agravo de instrumento", "agravo em recurso especial", "agravo", "ag int",
+    "ag instr", "ag reg", "habeas corpus", "h c", "hc", "rse", "apl", "rms", "rr",
+    "arr", "ar", "embargos de declaracao", "ed", "edcl", "eds", "sumula", "sum",
+    "sumula vinculante", "tema", "repercussao geral", "processo", "acordao", "julgado",
+    "precedente", "agr"
+  ],
+  "siglas": ["re", "resp", "aresp", "respe", "rhc", "hc", "rse", "apl", "rms", "rr", "arr", "ar", "rp", "agarr", "rcl", "recl", "agr", "agrg", "agint", "ed", "edcl", "eds"],
+  "marcadores_descritivos": ["acordao", "julgado", "precedente", "reclamacao"],
+  "marcadores_numerados": ["sumula", "sum", "sumula vinculante", "tema"],
+  "classes_citadas": [
+    {"padrao": "\\b(?:ARESP|AGRAVO\\s+(?:EM|NO)\\s+RECURSO\\s+ESPECIAL)\\b", "classe": "agravoemrecursoespecial"},
+    {"padrao": "\\b(?:RESP|RECURSO\\s+ESPECIAL)\\b", "classe": "recursoespecial"},
+    {"padrao": "\\b(?:ARE|RECURSO\\s+EXTRAORDINARIO\\s+COM\\s+AGRAVO)\\b", "classe": "recursoextraordinariocomagravo"},
+    {"padrao": "\\b(?:RE|RECURSO\\s+EXTRAORDINARIO)\\b", "classe": "recursoextraordinario"},
+    {"padrao": "\\b(?:RCL|RECLAMACAO)\\b", "classe": "reclamacao"},
+    {"padrao": "\\b(?:RHC|RECURSO\\s+EM\\s+HABEAS\\s+CORPUS)\\b", "classe": "recursoemhabeascorpus"},
+    {"padrao": "\\b(?:HC|HABEAS\\s+CORPUS)\\b", "classe": "habeascorpus"},
+    {"padrao": "\\b(?:RSE|RECURSO\\s+EM\\s+SENTIDO\\s+ESTRITO)\\b", "classe": "recursoemsentidoestrito"},
+    {"padrao": "\\b(?:APL|APELACAO)\\b", "classe": "apelacao"}
+  ]
+}

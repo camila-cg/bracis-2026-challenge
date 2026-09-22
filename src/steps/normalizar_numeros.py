@@ -5,12 +5,13 @@ from __future__ import annotations
 import re
 
 import eda_utils as u
+from configuracao import carregar_config
 from steps.pipeline_utils import BLOCO_NUMERICO, corrigir_ocr
 from steps.rotear_citacao import ROTA_ACORDAO
 
 # CNJ: NNNNNNN-DD.AAAA.J.TR.OOOO — os 13 dígitos finais têm estrutura fixa,
 # o sequencial às vezes vem sem os zeros à esquerda (TST/TSE).
-DIGITOS_CNJ_MIN = 14
+DIGITOS_CNJ_MIN = carregar_config("pipeline")["digitos_cnj_min"]
 
 
 def canonizar_bloco(digitos: str) -> str:

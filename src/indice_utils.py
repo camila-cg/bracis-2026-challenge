@@ -24,6 +24,7 @@ import unicodedata
 from datetime import datetime, timezone
 
 import eda_utils as u
+from configuracao import carregar_config
 
 # --------------------------------------------------------------------------- #
 # Parsers de cabeçalho por tribunal
@@ -100,16 +101,7 @@ PARSERS = {
     "TSE": [TSE_CABECALHO, TSE_ANDAMENTO],
 }
 
-UF_POR_EXTENSO = {
-    "ACRE": "AC", "ALAGOAS": "AL", "AMAPA": "AP", "AMAZONAS": "AM", "BAHIA": "BA",
-    "CEARA": "CE", "DISTRITO FEDERAL": "DF", "ESPIRITO SANTO": "ES", "GOIAS": "GO",
-    "MARANHAO": "MA", "MATO GROSSO": "MT", "MATO GROSSO DO SUL": "MS",
-    "MINAS GERAIS": "MG", "PARA": "PA", "PARAIBA": "PB", "PARANA": "PR",
-    "PERNAMBUCO": "PE", "PIAUI": "PI", "RIO DE JANEIRO": "RJ",
-    "RIO GRANDE DO NORTE": "RN", "RIO GRANDE DO SUL": "RS", "RONDONIA": "RO",
-    "RORAIMA": "RR", "SANTA CATARINA": "SC", "SAO PAULO": "SP", "SERGIPE": "SE",
-    "TOCANTINS": "TO",
-}
+UF_POR_EXTENSO = carregar_config("tribunais")["uf_por_extenso"]
 
 
 def _sem_acento(s: str) -> str:
@@ -221,14 +213,7 @@ def construir_indice_acordaos(con: sqlite3.Connection) -> tuple[dict, list[dict]
 
 # Estatuto de cada dispositivo mapeado à mão (o número de artigo sozinho não
 # basta, se repete entre códigos diferentes).
-ESTATUTO_POR_ID = {
-    10577194: "Código Eleitoral", 10590194: "Código Penal Militar",
-    10606184: "Código de Defesa do Consumidor", 10626510: "Constituição",
-    10637358: "CLT", 10641213: "Constituição", 10641516: "Constituição",
-    10647746: "CLT", 10652044: "Código de Processo Penal", 10710324: "CLT",
-    10718759: "Código Civil", 11304039: "Lei Complementar nº 64/1990",
-    28893055: "Código de Processo Civil",
-}
+ESTATUTO_POR_ID = {int(chave): valor for chave, valor in carregar_config("diplomas")["estatuto_por_id"].items()}
 
 # O texto dos dispositivos abre com "Artigo 276 da Lei nº ..."; sem o "(?:igo)?"
 # o regex parava em "Art" + "igo" e nenhum dos 13 dispositivos entrava no índice.
@@ -241,8 +226,8 @@ SUMULA_NO_TEXTO = re.compile(r"S[ÚU]MULA\s+(\d+)", re.UNICODE)
 # STF e TST não citam o próprio número em lugar nenhum do texto — identifiquei
 # comparando o enunciado com o texto oficial das duas súmulas.
 SUMULA_SEM_NUMERO_NO_TEXTO = {
-    1289712966: ("STF", "VINCULANTE-10"),
-    1431369957: ("TST", "331"),
+    int(chave): tuple(valor)
+    for chave, valor in carregar_config("diplomas")["sumula_sem_numero_no_texto"].items()
 }
 
 
@@ -302,18 +287,11 @@ def _normalizar_para_comparar(s: str) -> str:
     return _NAO_ALFANUM.sub("", sem_acento.lower())
 
 
-TRIBUNAL_CITADO = re.compile(r"\b(?:STF|STJ|TSE|TST|STM)\b", re.I)
+TRIBUNAL_CITADO = re.compile(r"\b(?:" + "|".join(map(re.escape, carregar_config("tribunais")["siglas"])) + r")\b", re.I)
 UF_CITADA = re.compile(r"(?:/|\s-\s|\(\s*)([A-Z]{2})(?=\b|\s*\))", re.I)
-CLASSES_CITADAS = (
-    (re.compile(r"\b(?:ARESP|AGRAVO\s+(?:EM|NO)\s+RECURSO\s+ESPECIAL)\b", re.I), "agravoemrecursoespecial"),
-    (re.compile(r"\b(?:RESP|RECURSO\s+ESPECIAL)\b", re.I), "recursoespecial"),
-    (re.compile(r"\b(?:ARE|RECURSO\s+EXTRAORDINARIO\s+COM\s+AGRAVO)\b", re.I), "recursoextraordinariocomagravo"),
-    (re.compile(r"\b(?:RE|RECURSO\s+EXTRAORDINARIO)\b", re.I), "recursoextraordinario"),
-    (re.compile(r"\b(?:RCL|RECLAMACAO)\b", re.I), "reclamacao"),
-    (re.compile(r"\b(?:RHC|RECURSO\s+EM\s+HABEAS\s+CORPUS)\b", re.I), "recursoemhabeascorpus"),
-    (re.compile(r"\b(?:HC|HABEAS\s+CORPUS)\b", re.I), "habeascorpus"),
-    (re.compile(r"\b(?:RSE|RECURSO\s+EM\s+SENTIDO\s+ESTRITO)\b", re.I), "recursoemsentidoestrito"),
-    (re.compile(r"\b(?:APL|APELACAO)\b", re.I), "apelacao"),
+CLASSES_CITADAS = tuple(
+    (re.compile(item["padrao"], re.I), item["classe"])
+    for item in carregar_config("classes_processuais")["classes_citadas"]
 )
 
 

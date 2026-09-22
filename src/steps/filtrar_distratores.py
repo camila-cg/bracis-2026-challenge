@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from configuracao import carregar_config
 
 # O número dos autos do próprio documento fica no cabeçalho. Citação de outro
 # processo em CNJ também pode vir como "processo nº TST-...", então o que
@@ -10,7 +11,7 @@ import re
 # Os rótulos das partes e do relator também são cabeçalho ("Reclamada: ...
 # Relator: Desembargador ..."): o extrator pega o bloco pelo "Relator" e pelos
 # nomes próprios.
-LIMITE_CABECALHO = 400
+LIMITE_CABECALHO = carregar_config("pipeline")["limite_cabecalho"]
 ABRE_COM_AUTOS = re.compile(
     r"\s*(?:processo|autos|reclamad[ao]|reclamante|agravad[ao]|agravante"
     r"|recorrid[ao]|recorrente|relator[a]?)\b|\s*\d",

@@ -7,26 +7,16 @@ import sqlite3
 
 import eda_utils as u
 import indice_utils as ind
+from configuracao import carregar_config
 from steps.pipeline_utils import BLOCO_NUMERICO, corrigir_ocr, tem_identificador
 from steps.rotear_citacao import E_SUMULA, ROTA_ACORDAO, ROTA_DESCRITIVA, ROTA_LEI, ROTA_SUMULA, ROTA_TEMA
 
 E_VINCULANTE = re.compile(r"vincul", re.I)
-TRIBUNAL = re.compile(r"\b(ST[FJMG]|TS[TE])\b")
+TRIBUNAL = re.compile(r"\b(" + "|".join(map(re.escape, carregar_config("tribunais")["siglas"])) + r")\b", re.I)
 LEI_NUMERADA = re.compile(r"\blei\s*(?:n\s*[º°o.]?\s*)?\d[\d.]*(?:/\d{2,4})?", re.I)
 
 # Estatuto citado -> nome usado em indice_utils.ESTATUTO_POR_ID.
-APELIDOS_ESTATUTO = {
-    "Constituição": ["constitui", "cf/88", "carta magna", "cf/1988"],
-    "CLT": ["clt", "consolidação das leis do trabalho", "consolidacao das leis do trabalho", "5.452"],
-    "Código de Processo Civil": ["cpc", "processo civil", "13.105"],
-    "Código de Processo Penal": ["cpp", "processo penal", "3.689"],
-    "Código Penal Militar": ["cpm", "penal militar", "1.001"],
-    "Código Civil": ["código civil", "codigo civil", "10.406"],
-    "Código de Defesa do Consumidor": ["cdc", "defesa do consumidor", "8.078"],
-    "Código Eleitoral": ["código eleitoral", "codigo eleitoral", "4.737"],
-    "Lei Complementar nº 64/1990": ["complementar nº 64", "complementar n. 64", "complementar 64",
-                                    "lc 64", "lc nº 64", "64/1990", "64/90"],
-}
+APELIDOS_ESTATUTO = carregar_config("diplomas")["apelidos_estatuto"]
 
 
 def estatuto_citado(trecho: str) -> str | None:

@@ -15,6 +15,8 @@ import unicodedata
 from difflib import SequenceMatcher
 from pathlib import Path
 
+from configuracao import carregar_config
+
 
 caminho = Path(__file__).resolve().parent.parent / "data"
 goldenset = caminho / "goldenset_offsets.csv"
@@ -23,43 +25,22 @@ documentos = caminho / "txt"
 
 # Vocabulário principal, baseado no goldenset.
 #BoW nas citações do gabarito + complementação com IA
+_TRIBUNAIS = carregar_config("tribunais")
+_CLASSES = carregar_config("classes_processuais")
+_DIPLOMAS = carregar_config("diplomas")
+_PIPELINE = carregar_config("pipeline")
 MARCADORES_VOCABULARIO = {
-    "jurisprudencia": [
-        "reclamacao", "recl", "rcl",
-        "recurso", "recurso especial", "re", "resp", "aresp", "agresp",
-        "recurso em mandado", "recurso em mandado de seguranca",
-        "recurso em habeas corpus", "rhc", "respe", "rec esp", "r esp",
-        "agravo interno", "agint", "agravo regimental", "agrg",
-        "agravo de instrumento", "agravo em recurso especial", "agravo",
-        "ag int", "ag instr", "ag reg",
-        "habeas corpus", "h c", "hc", "rse", "apl", "rms", "rr", "arr", "ar",
-        "embargos de declaracao", "ed", "edcl", "eds",
-        "sumula", "sum", "sumula vinculante", "tema", "repercussao geral",
-        "processo", "acordao", "julgado", "precedente", "agr"],
-    "lei": [ "art", "artigo", "lei", "lei complementar", "codigo",
-        "constituicao", "constituicao federal", "constituicao da republica",
-        "clt", "cpc", "codigo civil", "processo civil", "processo penal",
-        "defesa do consumidor", "codigo penal", "penal militar",
-        "codigo eleitoral", "consolidacao das leis do trabalho", "§",],
+    "jurisprudencia": _CLASSES["marcadores_jurisprudencia"],
+    "lei": _DIPLOMAS["marcadores_lei"],
 }
-
-TRIBUNAIS = {"stf", "stj", "tst", "tse", "stm"}
-
-UFS = {"ac", "al", "ap", "am", "ba", "ce", "df", "es", "go", "ma",
-    "mt", "ms", "mg", "pa", "pb", "pr", "pe", "pi", "rj", "rn",
-    "rs", "ro", "rr", "sc", "sp", "se", "to",}
-
-TERMOS_RELATORIA = {"rel", "relator", "relatora", "relatoria", "min", "ministro", "ministra",}
-
-COMPOSICAO_NOME = {"da", "das", "de", "do", "dos", "e"}
-
-MARCADORES_DESCRITIVOS = {"acordao", "julgado", "precedente", "reclamacao"}
-MARCADORES_NUMERADOS = {"sumula", "sum", "sumula vinculante", "tema"}
-MARCADORES_LEGAIS_NUMERADOS = { "art", "artigo", "§", "lei", "lei complementar",}
-
-SIGLAS = { "re", "resp", "aresp", "respe", "rhc", "hc", "rse", "apl", "rms",
-    "rr", "arr", "ar", "rp", "agarr", "rcl", "recl", "agr", "agrg",
-    "agint", "ed", "edcl", "eds",}
+TRIBUNAIS = set(_TRIBUNAIS["siglas"])
+UFS = set(_TRIBUNAIS["ufs"])
+TERMOS_RELATORIA = set(_DIPLOMAS["termos_relatoria"])
+COMPOSICAO_NOME = set(_DIPLOMAS["composicao_nome"])
+MARCADORES_DESCRITIVOS = set(_CLASSES["marcadores_descritivos"])
+MARCADORES_NUMERADOS = set(_CLASSES["marcadores_numerados"])
+MARCADORES_LEGAIS_NUMERADOS = set(_DIPLOMAS["marcadores_numerados"])
+SIGLAS = set(_CLASSES["siglas"])
 
 #para evitar que confuda com marcadores principais
 TERMOS_PRIORITARIOS_INDICIOS = (TERMOS_RELATORIA | TRIBUNAIS)
@@ -419,10 +400,10 @@ def agrupar_registros(texto_original, registros):
             ultimo_marcador = marcadores_do_grupo[-1]
             distancia_marcadores = (registro["inicio_token"] - ultimo_marcador["fim_token"] - 1)
             #heurística para quando tem mais de uma citação na mesma frase/parágrafo. Parece boa
-            novo_marcador_distante = (distancia_marcadores > 2 and registro.get("categoria") == "jurisprudencia")
+            novo_marcador_distante = (distancia_marcadores > _PIPELINE["distancia_marcadores_jurisprudencia"] and registro.get("categoria") == "jurisprudencia")
 
         #outra heurística que talvez precise ser ajustada para generalização
-        if (distancia <= 8 and tamanho_grupo <= 24 and not novo_marcador_distante and not limite_entre_citacoes(texto_original, anterior, registro)):
+        if (distancia <= _PIPELINE["distancia_maxima_grupo"] and tamanho_grupo <= _PIPELINE["tamanho_maximo_grupo"] and not novo_marcador_distante and not limite_entre_citacoes(texto_original, anterior, registro)):
             grupo_atual.append(registro)
         else:
             grupos.append(grupo_atual)
