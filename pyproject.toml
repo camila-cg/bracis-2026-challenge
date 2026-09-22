@@ -1,0 +1,22 @@
+[project]
+name = "bracis-2026-challenge"
+version = "0.1.0"
+description = "Verificação de citações jurídicas em pareceres de IA (Jusbrasil × BRACIS 2026)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    # usados pela métrica oficial (data/kaggle_metric.py)
+    "pandas",
+]
+
+[dependency-groups]
+# notebooks de EDA em src/*.ipynb
+notebooks = [
+    "ipykernel",
+    "jupyterlab",
+    "matplotlib",
+]
+
+[tool.uv]
+package = false
+default-groups = ["notebooks"]

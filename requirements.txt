@@ -1,0 +1,8 @@
+# Dependências para quem usa pip. Com uv, use o pyproject.toml (uv sync).
+numpy
+pandas
+
+# notebooks de EDA (src/*.ipynb)
+ipykernel
+jupyterlab
+matplotlib
