@@ -4,6 +4,37 @@ Encontre citações de jurisprudência e lei em documentos e classifique cada um
 
 ## Overview
 
+### Configuração do pipeline
+
+Os vocabulários e parâmetros editáveis ficam em `config/`: `tribunais.yaml`
+(siglas e UFs), `classes_processuais.yaml` (marcadores e classes citadas),
+`diplomas.yaml` (marcadores legais, apelidos e IDs da base), `regras_ocr.yaml`
+(trocas de letras por dígitos) e `pipeline.yaml` (limiares e confiança).
+Os arquivos usam o subconjunto JSON de YAML 1.2, lido sem dependências extras.
+As mudanças são carregadas ao iniciar o processo; reinicie o pipeline após editar.
+A ordem de `classes_citadas` e `apelidos_estatuto` é significativa, pois a primeira
+correspondência prevalece. Reavalie com `python src/pipeline.py --avaliar` após
+alterar os valores.
+
+### Representação intermediária
+
+Depois de extrair um span, o pipeline constrói uma `CitacaoNormalizada` com
+família, identificadores e metadados extraídos, mantendo o trecho original e
+seus offsets. O resolvedor consulta a base por esses campos e devolve um
+`ResultadoResolucao` com classe, ID, candidatos, cobertura e motivo. Zero
+registros compatíveis resulta em `inventada`; um resulta em `real`; vários ou
+identificadores insuficientes resultam em `incompleta`. Para temas e leis
+numeradas sem mapeamento, a convenção atual do desafio é preservada e a
+cobertura fica marcada como `fora_base` no JSON de diagnóstico.
+
+### Filtro contextual de metadados
+
+Antes de filtrar candidatos, o pipeline identifica campos rotulados no início
+do documento, o processo principal e a transição para o corpo. O filtro remove
+spans contidos nesses campos, mesmo em cabeçalhos longos, e preserva referências
+feitas no corpo. `motivo_distrator` informa a razão de cada exclusão; o limite
+fixo de 400 caracteres não é mais usado.
+
 LLMs generativos já são usados para redigir pareceres, petições e memorandos jurídicos. Um dos riscos mais documentados desses sistemas é a **alucinação de fontes**: o modelo cita jurisprudência ou dispositivos legais que não existem, ou apresenta citações tão vagas que não podem ser verificadas. Nos últimos anos, tribunais no Brasil e no exterior já sancionaram advogados por protocolar peças com citações inventadas geradas por IA.
 
 Neste desafio, você assume o papel de quem precisa construir o verificador automático que falta nesse fluxo de trabalho: um sistema que lê um documento judicial, identifica todas as citações de jurisprudência e de lei, e decide — para cada uma — se ela é **real**, **inventada** ou **incompleta**.
