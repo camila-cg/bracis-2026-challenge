@@ -30,9 +30,12 @@ LETRA_EM_NUMERO = re.compile(rf"(?<=\d)[{OCR_LETRA}]|(?<=\d\.)[{OCR_LETRA}]|[{OC
 
 # Bloco numérico: dígitos separados por qualquer mistura de ponto, espaço,
 # quebra de linha e hífen ("33.-\n474", "1.741. 784", "7220273--\n23.2018...").
-# Um dígito nunca vira outro (garantia do desafio), então juntar os dígitos
-# do bloco reconstrói o identificador; o separador é só ruído.
-BLOCO_NUMERICO = re.compile(r"\d(?:[.\s\-–]*\d)*")
+# Um ano após hífen separado por espaços ("1.741.784 - 2024") é outro
+# número, não continuação do identificador. Mantemos as quebras internas
+# usadas por CNJ/OCR, inclusive "33.-\n474".
+BLOCO_NUMERICO = re.compile(
+    r"\d(?:(?!\s+[-–]\s+(?:19|20)\d{2}\b)[.\s\-–]*\d)*"
+)
 
 
 def corrigir_ocr(trecho: str) -> str:
