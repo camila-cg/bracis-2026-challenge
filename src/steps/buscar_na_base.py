@@ -12,6 +12,7 @@ from steps.rotear_citacao import E_SUMULA, ROTA_ACORDAO, ROTA_DESCRITIVA, ROTA_L
 
 E_VINCULANTE = re.compile(r"vincul", re.I)
 TRIBUNAL = re.compile(r"\b(ST[FJMG]|TS[TE])\b")
+LEI_NUMERADA = re.compile(r"\blei\s*(?:n\s*[º°o.]?\s*)?\d[\d.]*(?:/\d{2,4})?", re.I)
 
 # Estatuto citado -> nome usado em indice_utils.ESTATUTO_POR_ID.
 APELIDOS_ESTATUTO = {
@@ -63,6 +64,8 @@ class Resolvedor:
             return "incompleta", None, "lei_sem_artigo"
         artigo = m.group(1).replace(".", "")
         estatuto = estatuto_citado(trecho)
+        if not estatuto and not LEI_NUMERADA.search(trecho):
+            return "incompleta", None, "lei_sem_estatuto"
         alvo = self.normativos.get(f"lei|{estatuto}|{artigo}") if estatuto else None
         if alvo:
             return "real", alvo["id"], "lei_real"
@@ -76,7 +79,9 @@ class Resolvedor:
             chave = f"sumula|STF|VINCULANTE-{numero}"
         else:
             m = TRIBUNAL.search(u.corrigir_ocr_em_numeros(trecho).upper())
-            chave = f"sumula|{m.group(1) if m else ''}|{numero}"
+            if not m:
+                return "incompleta", None, "sumula_sem_tribunal"
+            chave = f"sumula|{m.group(1)}|{numero}"
         alvo = self.normativos.get(chave)
         if alvo:
             return "real", alvo["id"], "sumula_real"
