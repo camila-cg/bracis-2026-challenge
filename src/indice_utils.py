@@ -60,15 +60,26 @@ STM_CABECALHO = re.compile(
     re.UNICODE,
 )
 
-# TSE é o pior caso: pontuação inconsistente, "-" e "—" misturados, e uma
-# fração dos registros com corrupção de encoding de verdade (letra acentuada
-# virou símbolo, não é problema de exibição). Esse regex cobre a maioria dos
-# casos limpos; o resto fica fora do índice.
+# TSE é o pior caso: pontuação inconsistente, "-" e "—" misturados, marcador
+# "Nº" às vezes vira "N o" (com espaço) ou some, número às vezes vem separado
+# só por espaço em vez de ponto, e "Relator" pode vir com ruído de OCR
+# (l -> I). Ainda sobra uma fração com corrupção de encoding de verdade
+# (letra acentuada virou símbolo, não é problema de exibição) — essa não
+# tem conserto por regex, fica de fora do índice.
 TSE_CABECALHO = re.compile(
-    r"(?P<classe>[A-ZÇÃÕÁÉÍÓÚÂÊÔ][A-ZÇÃÕÁÉÍÓÚÂÊÔ\s]+?)\s+N[ºo°]\s*"
-    r"(?P<numero>[\d.\-]+)\s*(?:\(\s*[\d.\-]+\s*\))?\s*"
-    r"[-—]?\s*(?:CLASSE\s*\d+[ªa]?[-—]?\s*)?[-—]?\s*"
-    r"(?P<uf>[A-ZÀ-Üa-zà-ü.\s\-]+?)\s+Relator",
+    r"(?P<classe>[A-ZÇÃÕÁÉÍÓÚÂÊÔ][A-ZÇÃÕÁÉÍÓÚÂÊÔ\s]+?)\s+"
+    r"(?:N\s?[º°o]?\.?\s*)?(?P<numero>\d[\d.\s\-]*\d)\s*(?:\(\s*[\d.\-]+\s*\))?\s*"
+    r"[-—]?\s*(?:CLASSE\s*\d+[ªa]?\s*\d*[-—]?\s*)?[-—]?\s*"
+    r"(?P<uf>[A-ZÀ-Üa-zà-ü.\s\-]+?)\s+R\s*e\s*[lI1]\s*a\s*t\s*o",
+    re.UNICODE,
+)
+
+# Uma fração dos acórdãos do TSE vem como página de andamento processual
+# ("Número: ... Classe: ... Órgão julgador...") em vez do cabeçalho de
+# acórdão de verdade — layout completamente diferente, regex à parte.
+TSE_ANDAMENTO = re.compile(
+    r"N[uú]mero:\s*(?P<numero>[\d.\-]+)\s*Classe:\s*"
+    r"(?P<classe>[A-ZÇÃÕÁÉÍÓÚÂÊÔ][A-ZÇÃÕÁÉÍÓÚÂÊÔ\s]+?)\s+[ÓO]rg[ãa]o",
     re.UNICODE,
 )
 
@@ -81,7 +92,12 @@ TST_FORMULA = re.compile(
 )
 TST_NUMERO = re.compile(r"^TST-(?P<codigo>[A-Za-z-]+)-(?P<numero>\d+-\d{2}\.\d{4}\.5\.\d{2}\.\d{4})$")
 
-PARSERS = {"STF": STF_CABECALHO, "STJ": STJ_CABECALHO, "STM": STM_CABECALHO, "TSE": TSE_CABECALHO}
+PARSERS = {
+    "STF": [STF_CABECALHO],
+    "STJ": [STJ_CABECALHO],
+    "STM": [STM_CABECALHO],
+    "TSE": [TSE_CABECALHO, TSE_ANDAMENTO],
+}
 
 UF_POR_EXTENSO = {
     "ACRE": "AC", "ALAGOAS": "AL", "AMAPA": "AP", "AMAZONAS": "AM", "BAHIA": "BA",
@@ -142,19 +158,20 @@ def parsear_cabecalho(tribunal: str, texto: str) -> dict | None:
             return None
         return {"classe": mf.group("codigo"), "numero": mf.group("numero"), "uf": None, "origem": None}
 
-    padrao = PARSERS.get(tribunal)
-    if padrao is None:
+    padroes = PARSERS.get(tribunal)
+    if padroes is None:
         return None
     janela = texto[:500] if tribunal != "STF" else texto[:400]
-    m = padrao.search(janela)
-    if not m:
-        return None
-    return {
-        "classe": re.sub(r"\s+", " ", m.group("classe")).strip(),
-        "numero": m.group("numero"),
-        "uf": m.group("uf") if "uf" in padrao.groupindex else None,
-        "origem": m.group("origem") if "origem" in padrao.groupindex else None,
-    }
+    for padrao in padroes:
+        m = padrao.search(janela)
+        if m:
+            return {
+                "classe": re.sub(r"\s+", " ", m.group("classe")).strip(),
+                "numero": m.group("numero"),
+                "uf": m.group("uf") if "uf" in padrao.groupindex else None,
+                "origem": m.group("origem") if "origem" in padrao.groupindex else None,
+            }
+    return None
 
 
 def normalizar_classe(bruto: str) -> str:

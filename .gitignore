@@ -7,3 +7,7 @@ __pycache__/
 
 .vscode/
 .idea/
+
+desafio1_bracis.db
+CONTEXTO.md
+data/
