@@ -1,9 +1,9 @@
 data/txt/
+data/desafio1_bracis.db
 
 __pycache__/
 .ipynb_checkpoints/
+.venv/
 
 .vscode/
 .idea/
-
-
