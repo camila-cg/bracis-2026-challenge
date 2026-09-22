@@ -7,6 +7,7 @@ registro -> guarda indícios e marcadores
 citação -> grupo formado por um marcador principal e seus indícios complementares.
 """
 
+import argparse
 import csv
 import json
 import re
@@ -15,7 +16,7 @@ from difflib import SequenceMatcher
 from pathlib import Path
 
 
-caminho = Path(__file__).resolve().parent / "desafio-jusbrasil-bracis-2026"
+caminho = Path(__file__).resolve().parent.parent / "data"
 goldenset = caminho / "goldenset_offsets.csv"
 documentos = caminho / "txt"
 
@@ -750,8 +751,21 @@ def analisar_documentos(caminho_goldenset=goldenset, pasta_documentos=documentos
 
 
 def main():
-    resposta = analisar_documentos()
-    print(json.dumps(resposta, ensure_ascii=False, indent=2))
+    parser = argparse.ArgumentParser(description="Detecta citações nos documentos e avalia contra o goldenset.")
+    parser.add_argument("--goldenset", type=Path, default=goldenset)
+    parser.add_argument("--txt", type=Path, default=documentos, help="pasta com os <documento_id>.txt")
+    parser.add_argument("--saida", type=Path, help="grava o JSON neste arquivo em vez de imprimir")
+    args = parser.parse_args()
+
+    resposta = analisar_documentos(args.goldenset, args.txt)
+    saida = json.dumps(resposta, ensure_ascii=False, indent=2)
+    if args.saida is None:
+        print(saida)
+        return
+    args.saida.write_text(saida, encoding="utf-8")
+    t = resposta["treinamento_threshold"]
+    #resumo no terminal; o detalhe fica no arquivo
+    print({k: v for k, v in t.items() if k != "falsos_positivos_por_documento"})
 
 
 if __name__ == "__main__":
