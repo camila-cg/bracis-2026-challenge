@@ -212,7 +212,9 @@ ESTATUTO_POR_ID = {
     28893055: "Código de Processo Civil",
 }
 
-ARTIGO_INICIAL = re.compile(r"\s*Art\.?\s*([\d.]+)", re.I)
+# O texto dos dispositivos abre com "Artigo 276 da Lei nº ..."; sem o "(?:igo)?"
+# o regex parava em "Art" + "igo" e nenhum dos 13 dispositivos entrava no índice.
+ARTIGO_INICIAL = re.compile(r"\s*Art(?:igo)?\.?\s*(\d[\d.]*)", re.I)
 
 # Súmulas do STJ citam o próprio número no fim do enunciado, tipo referência
 # bibliográfica: "(SÚMULA 83, CORTE ESPECIAL, julgado em ...)".
