@@ -200,7 +200,7 @@ def procurar_marcadores_principais(tokens):
 
          #agora somente procura no vocabulário se não for uma sigla composta
         if marcador_encontrado is None:
-            for tamanho in (4, 3, 2, 1):
+            for tamanho in (5, 4, 3, 2, 1):
                 #fim exclusivo
                 fim = indice + tamanho
                 if fim > len(tokens):
