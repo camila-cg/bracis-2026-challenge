@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import csv
 import json
-import sys
 from pathlib import Path
 
 from steps.pipeline_utils import DADOS, carregar_modulo
@@ -20,6 +20,9 @@ def gravar_saida(documentos: list[dict], saida: Path) -> Path:
 
     conversor = carregar_modulo(DADOS / "json_to_submission.py", "json_to_submission")
     submission_csv = saida / "submission.csv"
-    sys.argv = ["json_to_submission.py", str(pasta_json), str(submission_csv)]
-    conversor.main()
+    with submission_csv.open("w", newline="", encoding="utf-8") as arquivo:
+        writer = csv.writer(arquivo)
+        writer.writerow(["documento_id", "citacoes"])
+        writer.writerows((doc["documento_id"], conversor.encode(doc)) for doc in documentos)
+    print(f"{submission_csv}: {len(documentos)} documentos.")
     return submission_csv
