@@ -22,5 +22,6 @@
     {"padrao": "\\b(?:HC|HABEAS\\s+CORPUS)\\b", "classe": "habeascorpus"},
     {"padrao": "\\b(?:RSE|RECURSO\\s+EM\\s+SENTIDO\\s+ESTRITO)\\b", "classe": "recursoemsentidoestrito"},
     {"padrao": "\\b(?:APL|APELACAO)\\b", "classe": "apelacao"}
+    {"padrao": "\\b(?:MANDADO\\s+DE\\s+SEGURANCA|MS\\b(?=\\s*(?:N[º°.]?\\s*)?\\d))", "classe": "mandadodeseguranca"}
   ]
 }
