@@ -12,6 +12,7 @@ import csv
 import json
 import re
 import unicodedata
+from datetime import date
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -31,10 +32,10 @@ _DIPLOMAS = carregar_config("diplomas")
 _PIPELINE = carregar_config("pipeline")
 MARCADORES_VOCABULARIO = {
     "jurisprudencia": _CLASSES["marcadores_jurisprudencia"],
-    "lei": _DIPLOMAS["marcadores_lei"],
-}
+    "lei": _DIPLOMAS["marcadores_lei"],}
 TRIBUNAIS = set(_TRIBUNAIS["siglas"])
 UFS = set(_TRIBUNAIS["ufs"])
+ORGAOS_JULGADORES = _TRIBUNAIS.get("orgaos_julgadores", [])
 TERMOS_RELATORIA = set(_DIPLOMAS["termos_relatoria"])
 COMPOSICAO_NOME = set(_DIPLOMAS["composicao_nome"])
 MARCADORES_DESCRITIVOS = set(_CLASSES["marcadores_descritivos"])
@@ -45,6 +46,53 @@ RESTRICOES_CONTEXTO = _CLASSES.get("restricoes_contextuais", {})
 
 #para evitar que confuda com marcadores principais
 TERMOS_PRIORITARIOS_INDICIOS = (TERMOS_RELATORIA | TRIBUNAIS)
+
+PADRAO_DATA = re.compile(
+    r"(?P<dia>\d{1,2})[./-]"
+    r"(?P<mes>\d{1,2})[./-]"
+    r"(?P<ano>\d{2}|\d{4})")
+
+TERMOS_DATA_JULGAMENTO = { "julgamento", "julgado", "julgada", "sessao",}
+
+TERMOS_DATA_PUBLICACAO = {"dje","dj", "publicado", "publicada", "publicacao",}
+
+
+def verifica_data_valida(texto):
+    match = PADRAO_DATA.fullmatch(texto)
+
+    if match is None:
+        return False
+
+    dia = int(match.group("dia"))
+    mes = int(match.group("mes"))
+    ano = int(match.group("ano"))
+
+    if ano < 100:
+        ano += 2000
+
+    try:
+        date(ano, mes, dia)
+    except ValueError:
+        return False
+
+    return True
+
+
+def classificar_contexto_data(tokens, indice_data):
+    inicio_contexto = max(0, indice_data - 3)
+
+    termos_anteriores = {token["normalizado"] for token in tokens[inicio_contexto:indice_data]}
+    token_anterior = (tokens[indice_data - 1]["normalizado"] if indice_data > 0 else None)
+    if token_anterior == "j":
+        return "data_julgamento"
+
+    if termos_anteriores & TERMOS_DATA_JULGAMENTO:
+        return "data_julgamento"
+
+    if termos_anteriores & TERMOS_DATA_PUBLICACAO:
+        return "data_publicacao"
+
+    return "data"
 
 def remover_acento(caractere):
     # Separa a letra do acento
@@ -159,26 +207,35 @@ def encontrar_marcador_parecido(expressao, opcoes, threshold=0.80):
 
 def marcador_atende_contexto(marcador, fim_indice, tokens):
     restricao = RESTRICOES_CONTEXTO.get(marcador)
-    #Se o marcador não possui restrição, pode ser aceito.
+
     if restricao is None:
         return True
 
     quantidade_tokens = restricao.get("numero_nos_proximos_tokens")
 
-    #Se não existe uma regra conhecida
     if quantidade_tokens is None:
         return True
 
-    inicio_busca = fim_indice + 1
-    fim_busca = inicio_busca + quantidade_tokens
-    proximos_tokens = tokens[inicio_busca:fim_busca]
+    proximos = tokens[fim_indice + 1: fim_indice + 1 + quantidade_tokens]
 
-    #Procura algum número nos tokens seguintes
-    for token in proximos_tokens:
-        texto_token = token["normalizado"]
-        if re.search(r"\d", texto_token):
-            return True
+    if not proximos:
+        return False
+
+    primeiro_token = proximos[0]["normalizado"]
+
+    #MS 32.714
+    if re.search(r"\d", primeiro_token):
+        return True
+
+    indicadores_de_numero = { "n","nº", "n°","no","numero",}
+
+    # MS nº 32.714
+    if (primeiro_token in indicadores_de_numero and len(proximos) >= 2 and re.search(r"\d", proximos[1]["normalizado"])):
+        return True
+
     return False
+
+
 
 def procurar_marcadores_principais(tokens):
     marcadores_principais = []
@@ -260,9 +317,32 @@ def procurar_numeros(tokens):
         texto = token["normalizado"]
         if not re.search(r"\d", texto):
             continue
+
+        #ano isolado
         if re.fullmatch(r"(?:19|20)\d{2}", texto):
             indicios.append(criar_registro("ano", indice, indice, tokens, 1, valor=texto))
             continue
+
+        tem_formato_data = PADRAO_DATA.fullmatch(texto) is not None
+        if tem_formato_data:
+            tipo_data = classificar_contexto_data(tokens, indice)
+            data_valida = verifica_data_valida(texto)
+            tem_contexto_juridico = tipo_data != "data"
+
+            #Data válida sempre registra.
+            if data_valida:
+                pontos = 1 if tem_contexto_juridico else 0
+
+                indicios.append(criar_registro(tipo_data,indice,indice, tokens,pontos,valor=texto,data_valida=True,))
+                continue
+
+            #Data inválida com contexto jurídico preserva como possível erro de OCR, mas sem pontuar
+            if tem_contexto_juridico:
+                indicios.append(
+                    criar_registro(tipo_data,indice,indice,tokens,0,valor=texto,data_valida=False,))
+                continue
+
+            #Data inválida sem contexto segue para a verificação de número processual.
 
         quantidade_digitos = len(re.findall(r"\d", texto))
         possui_formato_processual = (quantidade_digitos >= 4 or bool(re.search(r"\d[./-]\d", texto)) or bool(re.search(r"[a-z]+-.*\d", texto)))
@@ -365,6 +445,32 @@ def procurar_relatorias_e_nomes(texto_original, tokens):
             indicios.append(criar_registro("nome_proprio", inicio_nome, fim_nome, tokens, 1, valor=" ".join(parte["original"] for parte in partes),))
     return indicios
 
+def procurar_orgaos_julgadores(tokens):
+    indicios = []
+
+    #Expressões maiores são verificadas primeiro
+    orgaos_ordenados = sorted(ORGAOS_JULGADORES, key=lambda orgao: len(orgao.split()), reverse=True,)
+
+    for inicio in range(len(tokens)):
+        for orgao in orgaos_ordenados:
+            quantidade_tokens = len(orgao.split())
+            fim_exclusivo = inicio + quantidade_tokens
+
+            if fim_exclusivo > len(tokens):
+                continue
+
+            expressao = " ".join(token["normalizado"] for token in tokens[inicio:fim_exclusivo])
+
+            if expressao != orgao:
+                continue
+
+            fim_indice = fim_exclusivo - 1
+
+            indicios.append(criar_registro("orgao_julgador", inicio, fim_indice, tokens, 0, valor=orgao,))
+            break
+
+    return indicios
+
 ######### Essa parte debaixo foi totalmente feita por IA (e não toda foi revisada a fundo) para conseguir executar o código e testar o funcionamento das regras acima, ajustar algumas coisas... Ainda não fiz a parte oficial 
 ####### de juntar os registros identificados em citações, calcular a pontuação final, comparar com os documentos e dar um retorno
 ####### parece que está funcionando, mas tem que ser revisada e pelo que olhei não era exatamente como eu estava pensando, mas deve dar para aproveitar algumas coisas mais mecânicas e que não vale a pena perder muito tempo fazendo
@@ -375,6 +481,7 @@ def detectar_marcadores_e_indicios(texto_original, tokens):
     registros.extend(procurar_marcadores_principais(tokens))
     registros.extend(procurar_numeros(tokens))
     registros.extend(procurar_tribunais_e_ufs(tokens))
+    registros.extend(procurar_orgaos_julgadores(tokens))
     registros.extend(procurar_relatorias_e_nomes(texto_original, tokens))
     registros_unicos = {}
     for registro in registros:
@@ -450,7 +557,7 @@ def parece_jurisprudencia_sem_marcador(grupo):
     tem_uf = "uf" in tipos
     tem_relatoria = "relatoria" in tipos
     tem_orgao = "orgao_julgador" in tipos
-    tem_data = "data_julgamento" in tipos
+    tem_data = bool(tipos & {"data_julgamento","data_publicacao",})
 
     citacao_numerada_completa = (tem_numero and tem_uf and tem_tribunal)
 
@@ -465,7 +572,7 @@ def parece_jurisprudencia_sem_marcador(grupo):
 def escolher_categoria(grupo):
     marcadores_principais = [ registro for registro in grupo
         if registro["tipo_registro"] == "marcador_principal"]
-     if not marcadores_principais:
+    if not marcadores_principais:
         if parece_jurisprudencia_sem_marcador(grupo):
             return "jurisprudencia"
         return None
