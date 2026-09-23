@@ -73,7 +73,12 @@ class OffsetsEQuebrasDeLinha(unittest.TestCase):
 
 class TiposDeCitacao(unittest.TestCase):
     def test_jurisprudencia_em_formatos_representativos(self):
-        for trecho in ("REsp 1.741.784/PR", "HC 123456 do STF", "Agravo de Instrumento 123456"):
+        for trecho in (
+            "REsp 1.741.784/PR",
+            "HC 123456 do STF",
+            "Agravo de Instrumento 123456",
+            "Mandado de Segurança 32714",
+        ):
             with self.subTest(trecho=trecho):
                 encontrados = candidatos("Conforme " + trecho + ", há precedente.")
                 self.assertTrue(any(item["tipo"] == "jurisprudencia" for item in encontrados))
@@ -94,6 +99,48 @@ class TiposDeCitacao(unittest.TestCase):
         for texto in ("O recurso foi apresentado.", "A lei foi debatida.", "O artigo é relevante."):
             with self.subTest(texto=texto):
                 self.assertEqual(candidatos(texto), [])
+
+    def test_ms_ambiguo_e_classe_processual_mas_nao_marcador_principal(self):
+        texto = "MS 32.714/MS, Plenário do STF, rel. Min. Rosa Weber, julgamento em 6.11.2014"
+        tokens = detector.criar_tokens(texto)
+        registros = detector.detectar_marcadores_e_indicios(texto, tokens)
+
+        self.assertFalse(any(
+            registro["tipo_registro"] == "marcador_principal"
+            and registro.get("marcador") == "ms"
+            for registro in registros
+        ))
+        self.assertTrue(any(
+            registro["tipo_registro"] == "classe_processual"
+            and registro.get("classe") == "mandadodeseguranca"
+            and registro["pontos"] == 1
+            for registro in registros
+        ))
+
+        encontrados = candidatos(texto)
+        self.assertEqual([item["trecho"] for item in encontrados], [texto])
+
+    def test_ms_geografico_nao_vira_citacao(self):
+        for texto in (
+            "Investimentos no MS 2024 cresceram.",
+            "A reunião aconteceu em Campo Grande/MS.",
+        ):
+            with self.subTest(texto=texto):
+                self.assertEqual(candidatos(texto), [])
+
+    def test_ms_geografico_em_citacao_de_lei_nao_vira_classe_processual(self):
+        texto = "A lei do Estado de MS nº 123 foi regulamentada."
+        tokens = detector.criar_tokens(texto)
+        registros = detector.detectar_marcadores_e_indicios(texto, tokens)
+
+        self.assertFalse(any(
+            registro["tipo_registro"] == "classe_processual"
+            for registro in registros
+        ))
+        self.assertEqual(
+            [item["tipo"] for item in candidatos(texto)],
+            ["lei"],
+        )
 
 
 class FiltrosDeDistratores(unittest.TestCase):

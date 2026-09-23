@@ -42,7 +42,7 @@ MARCADORES_DESCRITIVOS = set(_CLASSES["marcadores_descritivos"])
 MARCADORES_NUMERADOS = set(_CLASSES["marcadores_numerados"])
 MARCADORES_LEGAIS_NUMERADOS = set(_DIPLOMAS["marcadores_numerados"])
 SIGLAS = set(_CLASSES["siglas"])
-RESTRICOES_CONTEXTO = _CLASSES.get("restricoes_contextuais", {})
+SIGLAS_CLASSES_AMBIGUAS = _CLASSES.get("siglas_classes_ambiguas", {})
 
 #para evitar que confuda com marcadores principais
 TERMOS_PRIORITARIOS_INDICIOS = (TERMOS_RELATORIA | TRIBUNAIS)
@@ -205,35 +205,38 @@ def encontrar_marcador_parecido(expressao, opcoes, threshold=0.80):
         return melhor_opcao, melhor_score
     return None, melhor_score
 
-def marcador_atende_contexto(marcador, fim_indice, tokens):
-    restricao = RESTRICOES_CONTEXTO.get(marcador)
-
-    if restricao is None:
-        return True
-
-    quantidade_tokens = restricao.get("numero_nos_proximos_tokens")
-
-    if quantidade_tokens is None:
-        return True
-
-    proximos = tokens[fim_indice + 1: fim_indice + 1 + quantidade_tokens]
-
+def tem_numero_logo_depois(indice, tokens):
+    proximos = tokens[indice + 1: indice + 3]
     if not proximos:
         return False
 
-    primeiro_token = proximos[0]["normalizado"]
-
-    #MS 32.714
-    if re.search(r"\d", primeiro_token):
+    if re.search(r"\d", proximos[0]["normalizado"]):
         return True
 
-    indicadores_de_numero = { "n","nº", "n°","no","numero",}
+    indicadores_de_numero = {"n", "nº", "n°", "no", "numero"}
+    return (proximos[0]["normalizado"] in indicadores_de_numero
+        and len(proximos) >= 2
+        and re.search(r"\d", proximos[1]["normalizado"]) is not None)
 
-    # MS nº 32.714
-    if (primeiro_token in indicadores_de_numero and len(proximos) >= 2 and re.search(r"\d", proximos[1]["normalizado"])):
-        return True
+#siglas ambíguas nao viram marcadores principais
+def procurar_classes_processuais_ambiguas(tokens):
+    classes = []
 
-    return False
+    for indice, token in enumerate(tokens):
+        sigla = token["normalizado"]
+        regra = SIGLAS_CLASSES_AMBIGUAS.get(sigla)
+
+        if regra is None or not tem_numero_logo_depois(indice, tokens):
+            continue
+
+        token_anterior = ( tokens[indice - 1]["normalizado"] if indice > 0 else None)
+        if token_anterior in regra.get("tokens_anteriores_bloqueados", []):
+            continue
+
+        classes.append(
+            criar_registro("classe_processual",indice,indice,tokens,1,valor=sigla,classe=regra["classe"],))
+
+    return classes
 
 
 
@@ -288,10 +291,6 @@ def procurar_marcadores_principais(tokens):
             continue
         categoria, marcador, similaridade, fim_indice = marcador_encontrado
 
-        #Valida regras especiais
-        if not marcador_atende_contexto(marcador, fim_indice, tokens):
-            continue
-        
         intervalo = (indice, fim_indice)
         if intervalo in intervalos_usados:
             continue
@@ -479,6 +478,7 @@ def procurar_orgaos_julgadores(tokens):
 def detectar_marcadores_e_indicios(texto_original, tokens):
     registros = []
     registros.extend(procurar_marcadores_principais(tokens))
+    registros.extend(procurar_classes_processuais_ambiguas(tokens))
     registros.extend(procurar_numeros(tokens))
     registros.extend(procurar_tribunais_e_ufs(tokens))
     registros.extend(procurar_orgaos_julgadores(tokens))
@@ -558,6 +558,7 @@ def parece_jurisprudencia_sem_marcador(grupo):
     tem_relatoria = "relatoria" in tipos
     tem_orgao = "orgao_julgador" in tipos
     tem_data = bool(tipos & {"data_julgamento","data_publicacao",})
+    tem_classe_processual = "classe_processual" in tipos
 
     citacao_numerada_completa = (tem_numero and tem_uf and tem_tribunal)
 
@@ -565,7 +566,9 @@ def parece_jurisprudencia_sem_marcador(grupo):
 
     citacao_descritiva = (tem_tribunal and tem_relatoria and (tem_orgao or tem_data))
 
-    return (citacao_numerada_completa or citacao_numerada_contextual or citacao_descritiva)
+    citacao_com_classe_processual = (tem_classe_processual and tem_numero and (tem_tribunal or tem_uf or tem_relatoria or tem_orgao or tem_data))
+
+    return (citacao_numerada_completa or citacao_numerada_contextual or citacao_descritiva or citacao_com_classe_processual)
 
 
 #define a categoria dos registros - ok
