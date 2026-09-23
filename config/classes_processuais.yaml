@@ -7,7 +7,7 @@
     "ag instr", "ag reg", "habeas corpus", "h c", "hc", "rse", "apl", "rms", "rr",
     "arr", "ar", "embargos de declaracao", "ed", "edcl", "eds", "sumula", "sum",
     "sumula vinculante", "tema", "repercussao geral", "processo", "acordao", "julgado",
-    "precedente", "agr"
+    "precedente", "agr", "mandado de seguranca",
   ],
   "siglas": ["re", "resp", "aresp", "respe", "rhc", "hc", "rse", "apl", "rms", "rr", "arr", "ar", "rp", "agarr", "rcl", "recl", "agr", "agrg", "agint", "ed", "edcl", "eds"],
   "marcadores_descritivos": ["acordao", "julgado", "precedente", "reclamacao"],
