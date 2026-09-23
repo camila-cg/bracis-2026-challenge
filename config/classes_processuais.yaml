@@ -7,7 +7,7 @@
     "ag instr", "ag reg", "habeas corpus", "h c", "hc", "rse", "apl", "rms", "rr",
     "arr", "ar", "embargos de declaracao", "ed", "edcl", "eds", "sumula", "sum",
     "sumula vinculante", "tema", "repercussao geral", "processo", "acordao", "julgado",
-    "precedente", "agr", "mandado de seguranca",
+    "precedente", "agr", "mandado de seguranca"
   ],
   "siglas": ["re", "resp", "aresp", "respe", "rhc", "hc", "rse", "apl", "rms", "rr", "arr", "ar", "rp", "agarr", "rcl", "recl", "agr", "agrg", "agint", "ed", "edcl", "eds"],
   "marcadores_descritivos": ["acordao", "julgado", "precedente", "reclamacao"],
@@ -21,7 +21,7 @@
     {"padrao": "\\b(?:RHC|RECURSO\\s+EM\\s+HABEAS\\s+CORPUS)\\b", "classe": "recursoemhabeascorpus"},
     {"padrao": "\\b(?:HC|HABEAS\\s+CORPUS)\\b", "classe": "habeascorpus"},
     {"padrao": "\\b(?:RSE|RECURSO\\s+EM\\s+SENTIDO\\s+ESTRITO)\\b", "classe": "recursoemsentidoestrito"},
-    {"padrao": "\\b(?:APL|APELACAO)\\b", "classe": "apelacao"}
+    {"padrao": "\\b(?:APL|APELACAO)\\b", "classe": "apelacao"},
     {"padrao": "\\b(?:MANDADO\\s+DE\\s+SEGURANCA|MS\\b(?=\\s*(?:N[º°.]?\\s*)?\\d))", "classe": "mandadodeseguranca"}
   ]
 }
