@@ -22,6 +22,30 @@
     {"padrao": "\\b(?:HC|HABEAS\\s+CORPUS)\\b", "classe": "habeascorpus"},
     {"padrao": "\\b(?:RSE|RECURSO\\s+EM\\s+SENTIDO\\s+ESTRITO)\\b", "classe": "recursoemsentidoestrito"},
     {"padrao": "\\b(?:APL|APELACAO)\\b", "classe": "apelacao"},
-    {"padrao": "\\b(?:MANDADO\\s+DE\\s+SEGURANCA|MS\\b(?=\\s*(?:N[º°.]?\\s*)?\\d))", "classe": "mandadodeseguranca"}
+    {"padrao": "\\b(?:MANDADO\\s+DE\\s+SEGURANCA|MS\\b(?=\\s*(?:N[º°.]?\\s*)?\\d))", "classe": "mandadodeseguranca"},
+    {"padrao": "\\bAIRR\\b", "classe": "agravodeinstrumentoemrecursoderevista"},
+    {"padrao": "\\bARR\\b", "classe": "agravoemrecursoderevista"},
+    {"padrao": "\\bRRAG\\b", "classe": "recursoderevistacomagravo"},
+    {"padrao": "(?<!/)\\bRR\\b", "classe": "recursoderevista"},
+    {"padrao": "\\bROT\\b", "classe": "recursoordinariotrabalhista"},
+    {"padrao": "\\b(?:RECURSO\\s+ORDINARIO|RO\\b(?=[\\s\\-]*(?:N[º°.]?\\s*)?\\d))", "classe": "recursoordinario"},
+    {"padrao": "\\b(?:AGRAVO\\s+DE\\s+INSTRUMENTO|AI\\b(?=[\\s\\-]*(?:N[º°.]?\\s*)?\\d))", "classe": "agravodeinstrumento"},
+    {"padrao": "\\bEMBARGOS\\s+INFRINGENTES\\b", "classe": "embargosinfringentes"},
+    {"padrao": "\\b(?:ACAO\\s+RESCISORIA|AR\\b(?=[\\s\\-]*(?:N[º°.]?\\s*)?\\d))", "classe": "acaorescisoria"},
+    {"padrao": "\\b(?:CAUTELAR\\s+INOMINADA|ACAO\\s+CAUTELAR|TUTELA\\s+CAUTELAR)\\b", "classe": "cautelar"},
+    {"padrao": "\\bCONFLITO\\s+DE\\s+(?:COMPETENCIA|JURISDICAO)\\b", "classe": "conflitodecompetencia"},
+    {"padrao": "\\b(?:ADI|ADIN|ACAO\\s+DIRETA\\s+DE\\s+INCONSTITUCIONALIDADE)\\b", "classe": "adi"},
+    {"padrao": "\\b(?:ADC|ACAO\\s+DECLARATORIA\\s+DE\\s+CONSTITUCIONALIDADE)\\b", "classe": "adc"},
+    {"padrao": "\\b(?:ADPF|ARGUICAO\\s+DE\\s+DESCUMPRIMENTO\\s+DE\\s+PRECEITO\\s+FUNDAMENTAL)\\b", "classe": "adpf"},
+    {"padrao": "\\b(?:MANDADO\\s+DE\\s+INJUNCAO|MI\\b(?=[\\s\\-]*(?:N[º°.]?\\s*)?\\d))", "classe": "mandadodeinjuncao"},
+    {"padrao": "\\b(?:HABEAS\\s+DATA|HD\\b(?=[\\s\\-]*(?:N[º°.]?\\s*)?\\d))", "classe": "habeasdata"},
+    {"padrao": "\\bAGRAVO\\s+INTERNO\\b", "classe": "agravointerno"},
+    {"padrao": "\\bEMBARGOS\\s+DE\\s+DECLARACAO\\b", "classe": "embargosdedeclaracao"}
+  ],
+  "modificadores_recursais": [
+    {"padrao": "\\bAG\\s*INT\\b|\\bAGRAVO\\s+INTERNO\\b", "modificador": "agravo_interno"},
+    {"padrao": "\\bAG\\s*RG\\b|\\bAGRAVO\\s+REGIMENTAL\\b", "modificador": "agravo_regimental"},
+    {"padrao": "\\bED\\s*CL\\b|\\bEMBARGOS\\s+DE\\s+DECLARACAO\\b", "modificador": "embargos_declaracao"},
+    {"padrao": "\\bEMBARGOS\\s+DE\\s+DIVERGENCIA\\b", "modificador": "embargos_divergencia"}
   ]
 }

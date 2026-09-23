@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 
 import indice_utils as ind
+from steps.pipeline_utils import corrigir_ocr
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,12 +43,15 @@ NUMERO_PROCESSO = re.compile(
     re.I,
 )
 DISTRATOR = re.compile(r"R\$|\bfls?\.\s*\d|\bOAB\b|\bprotocolo\b", re.I)
-VALOR_DA_CAUSA = re.compile(
+_RUBRICA_VALOR = (
     r"(?:valor\s+(?:atribu[ií]do\s+)?(?:da|à)\s+causa"
-    r"|d[aá]-se\s+à\s+causa\s+o\s+valor)\s*(?::|de)?\s*"
-    r"(?:R\$\s*)?(?P<quantia>\d{1,3}(?:\.\d{3})+(?:,\d{2})?|\d+(?:,\d{2})?)\b",
-    re.I,
+    r"|d[aá]-se\s+à\s+causa\s+o\s+valor)"
 )
+_QUANTIA = r"(?:R\$\s*)?(?P<quantia>\d{1,3}(?:\.\d{3})+(?:,\d{2})?|\d+(?:,\d{2})?)\b"
+VALOR_DA_CAUSA = re.compile(rf"{_RUBRICA_VALOR}\s*(?::|de)?\s*{_QUANTIA}", re.I)
+# "Valor da causa:" sozinho na linha, sem a quantia — ela vem na linha seguinte.
+ROTULO_VALOR_SEM_QUANTIA = re.compile(rf"^\s*{_RUBRICA_VALOR}\s*(?::|de)?\s*$", re.I)
+QUANTIA_NO_INICIO_DA_LINHA = re.compile(rf"^\s*{_QUANTIA}", re.I)
 
 
 def analisar_contexto(texto: str) -> ContextoDocumento:
@@ -83,7 +87,7 @@ def analisar_contexto(texto: str) -> ContextoDocumento:
                 else:
                     fim = offset + m.end()
             elif rotulo.startswith("valor"):
-                valor = VALOR_DA_CAUSA.search(linha)
+                valor = VALOR_DA_CAUSA.search(corrigir_ocr(linha))
                 if valor:
                     fim = offset + valor.end()
             campos.append(CampoMetadado(rotulo, offset + m.start(), fim, numero))
@@ -108,12 +112,30 @@ def _e_valor_da_causa(candidato: dict, texto: str) -> bool:
     linha_fim = texto.find("\n", fim)
     if linha_fim < 0:
         linha_fim = len(texto)
-    linha = texto[linha_inicio:linha_fim]
+    # corrigir_ocr troca 1 caractere por 1 caractere (letra->dígito colada a
+    # dígito): não desloca offsets, então dá pra reaproveitar as posições da
+    # linha original mesmo depois da correção.
+    linha = corrigir_ocr(texto[linha_inicio:linha_fim])
     for campo in VALOR_DA_CAUSA.finditer(linha):
         quantia_inicio = linha_inicio + campo.start("quantia")
         campo_fim = linha_inicio + campo.end()
         if inicio < campo_fim and fim > quantia_inicio and fim <= campo_fim:
             return True
+    # Rótulo e quantia às vezes ficam em linhas diferentes
+    # ("Valor da causa:\nR$ 10.000,00"): sem isso, a quantia sobra como se
+    # fosse uma citação. Só olha 1 linha pra trás, e só quando ela é
+    # exclusivamente o rótulo (nada de conteúdo estranho vira gatilho).
+    if linha_inicio > 0:
+        anterior_fim = linha_inicio - 1
+        anterior_inicio = texto.rfind("\n", 0, anterior_fim) + 1
+        linha_anterior = corrigir_ocr(texto[anterior_inicio:anterior_fim])
+        if ROTULO_VALOR_SEM_QUANTIA.search(linha_anterior):
+            m = QUANTIA_NO_INICIO_DA_LINHA.match(linha)
+            if m:
+                quantia_inicio = linha_inicio + m.start("quantia")
+                campo_fim = linha_inicio + m.end()
+                if inicio < campo_fim and fim > quantia_inicio and fim <= campo_fim:
+                    return True
     return False
 
 

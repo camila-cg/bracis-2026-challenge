@@ -86,6 +86,23 @@ class Resolvedor:
         ids = {registro["id"] for registro in compativeis}
         if len(ids) <= 1:
             return ids
+        # A classe-balde de _compativel ignora o estágio recursal (AgInt/AgRg/
+        # EDcl/embargos de divergência) — é o que mais distingue acórdãos que
+        # colidem por número dentro do mesmo tribunal/UF/classe. Tentamos
+        # desempatar por isso primeiro, mas SÓ adotamos se sobrar exatamente
+        # 1: o campo "classe" do cabeçalho às vezes registra apenas a classe
+        # de base (ex. "RECLAMAÇÃO") mesmo quando o acórdão é um "AgInt"
+        # sobre ela — se aplicássemos isso como filtro rígido, um caso desses
+        # zerava os candidatos e uma citação real virava "inventada". Por
+        # isso é desempate (nunca reduz a zero), não filtro.
+        modificadores_citacao = ind._modificadores_citados(citacao.trecho)
+        if modificadores_citacao:
+            por_modificador = {
+                registro["id"] for registro in compativeis
+                if modificadores_citacao == ind._modificadores_citados(registro["classe"])
+            }
+            if len(por_modificador) == 1:
+                return por_modificador
         trecho_norm = ind._normalizar_para_comparar(citacao.normalizado)
         batidas = {
             registro["id"] for registro in compativeis

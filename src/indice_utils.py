@@ -304,6 +304,22 @@ def _classe_citada(trecho: str) -> str | None:
     return None
 
 
+# Estágio recursal (AgInt, AgRg, EDcl, embargos de divergência) dentro da
+# mesma classe-base: "AgRg no REsp X" e "EDcl no AgRg no REsp X" são decisões
+# diferentes do mesmo processo. O balde de classe (CLASSES_CITADAS) ignora
+# esses prefixos, então dois registros colidentes por número quase sempre
+# caem no mesmo balde. Isso complementa _classe_citada() sem substituí-lo.
+MODIFICADORES_RECURSAIS = tuple(
+    (re.compile(item["padrao"], re.I), item["modificador"])
+    for item in carregar_config("classes_processuais")["modificadores_recursais"]
+)
+
+
+def _modificadores_citados(trecho: str) -> frozenset[str]:
+    sem_acento = unicodedata.normalize("NFKD", trecho).encode("ascii", "ignore").decode()
+    return frozenset(modificador for padrao, modificador in MODIFICADORES_RECURSAIS if padrao.search(sem_acento))
+
+
 def _compativel(trecho: str, tribunal: str, classe: str, uf: str | None) -> bool:
     tribunal_citado = TRIBUNAL_CITADO.search(trecho)
     if tribunal_citado and tribunal_citado.group().upper() != tribunal:

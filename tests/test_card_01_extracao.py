@@ -122,6 +122,30 @@ class FiltrosDeDistratores(unittest.TestCase):
         item = {"inicio": inicio, "fim": inicio + len(citacao), "trecho": citacao}
         self.assertEqual(filtrar_distratores([item], texto), [item])
 
+    def test_valor_da_causa_com_digito_corrompido_por_ocr_e_filtrado(self):
+        # "1O.741.784,00": o dígito "1" isolado virou a letra "O" (OCR), colado a dígitos reais.
+        texto = "Valor da causa: R$ 1O.741.784,00"
+        quantia = "1O.741.784,00"
+        inicio = texto.index(quantia)
+        item = {"inicio": inicio, "fim": inicio + len(quantia), "trecho": quantia}
+        self.assertEqual(filtrar_distratores([item], texto), [])
+
+    def test_valor_da_causa_com_quantia_na_linha_seguinte_e_filtrado(self):
+        texto = "Valor da causa:\nR$ 10.000,00"
+        quantia = "10.000,00"
+        inicio = texto.index(quantia)
+        item = {"inicio": inicio, "fim": inicio + len(quantia), "trecho": quantia}
+        self.assertEqual(filtrar_distratores([item], texto), [])
+
+    def test_valor_da_causa_em_linha_isolada_de_prosa_nao_afeta_citacao(self):
+        # "valor da causa" mencionado em prosa (sem ":" nem quantia na própria linha)
+        # não deve puxar uma citação real na linha seguinte para dentro do campo.
+        texto = "O juiz fixou o valor da causa\ne determinou a citação do réu conforme REsp 1.741.784/PR."
+        citacao = "REsp 1.741.784/PR"
+        inicio = texto.index(citacao)
+        item = {"inicio": inicio, "fim": inicio + len(citacao), "trecho": citacao}
+        self.assertEqual(filtrar_distratores([item], texto), [item])
+
     def test_oab_folhas_e_valor_monetario_sao_filtrados(self):
         for trecho in ("OAB 12345 REsp 123456", "fls. 12 REsp 123456", "Valor da causa R$ 123456 REsp 123456"):
             with self.subTest(trecho=trecho):

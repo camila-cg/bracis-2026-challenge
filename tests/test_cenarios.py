@@ -52,6 +52,25 @@ class ResolucaoAcordaos(unittest.TestCase):
         with patch.object(ind, "resolver", return_value=set()):
             self.assertEqual(self.resolvedor.acordao("REsp 1.741.784/SC")[:2], ("inventada", None))
 
+    def test_estagio_recursal_desempata_colisao_de_numero(self):
+        # 1.599.372/PR tem dois acórdãos reais no mesmo tribunal/UF/classe
+        # (mesmo balde "recursoespecial"): um AgInt, outro Embargos de
+        # Divergência. Sem o estágio, fica ambíguo — com o estágio citado
+        # explicitamente, desempata para o acórdão certo.
+        self.assertEqual(self.resolvedor.acordao("AgInt no REsp 1.599.372/PR")[:2], ("real", 2684934117))
+        self.assertEqual(
+            self.resolvedor.acordao("Embargos de Divergência no REsp 1.599.372/PR")[:2],
+            ("real", 2679381856),
+        )
+        self.assertEqual(self.resolvedor.acordao("REsp 1.599.372/PR")[:2], ("incompleta", None))
+
+    def test_estagio_recursal_ausente_do_cabecalho_nao_zera_candidatos(self):
+        # 36.670/SP é um acórdão de AgInt cujo cabeçalho registra só a
+        # classe de base ("RECLAMAÇÃO", sem "AgInt"). O desempate por
+        # estágio não pode filtrar isso a zero — precisa cair pro
+        # comportamento anterior (resolve pelo número, único candidato).
+        self.assertEqual(self.resolvedor.acordao("AgInt na Rcl 36.670/SP")[:2], ("real", 2679568224))
+
 
 class ResolucaoNormativos(unittest.TestCase):
     @classmethod
