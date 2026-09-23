@@ -7,9 +7,12 @@
     "ag instr", "ag reg", "habeas corpus", "h c", "hc", "rse", "apl", "rms", "rr",
     "arr", "ar", "embargos de declaracao", "ed", "edcl", "eds", "sumula", "sum",
     "sumula vinculante", "tema", "repercussao geral", "processo", "acordao", "julgado",
-    "precedente", "agr", "mandado de seguranca"
+    "precedente", "agr", "mandado de seguranca", "ms"
   ],
-  "siglas": ["re", "resp", "aresp", "respe", "rhc", "hc", "rse", "apl", "rms", "rr", "arr", "ar", "rp", "agarr", "rcl", "recl", "agr", "agrg", "agint", "ed", "edcl", "eds"],
+  "siglas": ["re", "resp", "aresp", "respe", "rhc", "hc", "rse", "apl", "rms", "rr", "arr", "ar", "rp", "agarr", "rcl", "recl", "agr", "agrg", "agint", "ed", "edcl", "eds", "ms"],
+  #casos especiais
+  "restricoes_contextuais": {"ms": {"numero_nos_proximos_tokens": 2}},
+
   "marcadores_descritivos": ["acordao", "julgado", "precedente", "reclamacao"],
   "marcadores_numerados": ["sumula", "sum", "sumula vinculante", "tema"],
   "classes_citadas": [
