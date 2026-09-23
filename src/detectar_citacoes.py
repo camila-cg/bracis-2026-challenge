@@ -41,6 +41,7 @@ MARCADORES_DESCRITIVOS = set(_CLASSES["marcadores_descritivos"])
 MARCADORES_NUMERADOS = set(_CLASSES["marcadores_numerados"])
 MARCADORES_LEGAIS_NUMERADOS = set(_DIPLOMAS["marcadores_numerados"])
 SIGLAS = set(_CLASSES["siglas"])
+RESTRICOES_CONTEXTO = _CLASSES.get("restricoes_contextuais", {})
 
 #para evitar que confuda com marcadores principais
 TERMOS_PRIORITARIOS_INDICIOS = (TERMOS_RELATORIA | TRIBUNAIS)
@@ -156,6 +157,28 @@ def encontrar_marcador_parecido(expressao, opcoes, threshold=0.80):
         return melhor_opcao, melhor_score
     return None, melhor_score
 
+def marcador_atende_contexto(marcador, fim_indice, tokens):
+    restricao = RESTRICOES_CONTEXTO.get(marcador)
+    #Se o marcador não possui restrição, pode ser aceito.
+    if restricao is None:
+        return True
+
+    quantidade_tokens = restricao.get("numero_nos_proximos_tokens")
+
+    #Se não existe uma regra conhecida
+    if quantidade_tokens is None:
+        return True
+
+    inicio_busca = fim_indice + 1
+    fim_busca = inicio_busca + quantidade_tokens
+    proximos_tokens = tokens[inicio_busca:fim_busca]
+
+    #Procura algum número nos tokens seguintes
+    for token in proximos_tokens:
+        texto_token = token["normalizado"]
+        if re.search(r"\d", texto_token):
+            return True
+    return False
 
 def procurar_marcadores_principais(tokens):
     marcadores_principais = []
@@ -207,6 +230,11 @@ def procurar_marcadores_principais(tokens):
         if marcador_encontrado is None:
             continue
         categoria, marcador, similaridade, fim_indice = marcador_encontrado
+
+        #Valida regras especiais
+        if not marcador_atende_contexto(marcador, fim_indice, tokens):
+            continue
+        
         intervalo = (indice, fim_indice)
         if intervalo in intervalos_usados:
             continue
@@ -413,11 +441,33 @@ def agrupar_registros(texto_original, registros):
         grupos.append(grupo_atual)
     return grupos
 
+
+def parece_jurisprudencia_sem_marcador(grupo):
+    tipos = {registro["tipo_registro"] for registro in grupo}
+
+    tem_numero = "numero_processual" in tipos
+    tem_tribunal = "tribunal" in tipos
+    tem_uf = "uf" in tipos
+    tem_relatoria = "relatoria" in tipos
+    tem_orgao = "orgao_julgador" in tipos
+    tem_data = "data_julgamento" in tipos
+
+    citacao_numerada_completa = (tem_numero and tem_uf and tem_tribunal)
+
+    citacao_numerada_contextual = (tem_numero and (tem_tribunal or tem_uf) and (tem_relatoria or tem_orgao or tem_data))
+
+    citacao_descritiva = (tem_tribunal and tem_relatoria and (tem_orgao or tem_data))
+
+    return (citacao_numerada_completa or citacao_numerada_contextual or citacao_descritiva)
+
+
 #define a categoria dos registros - ok
 def escolher_categoria(grupo):
     marcadores_principais = [ registro for registro in grupo
         if registro["tipo_registro"] == "marcador_principal"]
-    if not marcadores_principais:
+     if not marcadores_principais:
+        if parece_jurisprudencia_sem_marcador(grupo):
+            return "jurisprudencia"
         return None
 
     marcadores_lei = {
