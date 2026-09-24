@@ -142,6 +142,85 @@ class TiposDeCitacao(unittest.TestCase):
             ["lei"],
         )
 
+    def test_apelacao_criminal_e_artigo_formam_citacoes_separadas(self):
+        jurisprudencia = "Ap. Crim. 7000424—61.2022.7.00.0000/DF, STM"
+        lei = "art. 290-B do Código Penal Militar"
+        texto = f"{jurisprudencia} e o suposto {lei}"
+
+        encontrados = candidatos(texto)
+
+        self.assertEqual(
+            [(item["tipo"], item["trecho"]) for item in encontrados],
+            [("jurisprudencia", jurisprudencia), ("lei", lei)],
+        )
+
+    def test_ro_e_ro_eleitoral_sao_classes_ambiguas_com_numero(self):
+        casos = (
+            ("RO 1984-03.2014.6.08.0000, TSE", "recursoordinario"),
+            ("RO-El 0600710-22.2022.6.12.0000, TSE", "recursoordinarioeleitoral"),
+        )
+
+        for texto, classe in casos:
+            with self.subTest(texto=texto):
+                tokens = detector.criar_tokens(texto)
+                registros = detector.detectar_marcadores_e_indicios(texto, tokens)
+
+                self.assertFalse(any(
+                    registro["tipo_registro"] == "marcador_principal"
+                    and registro.get("marcador") in {"ro", "ro-el"}
+                    for registro in registros
+                ))
+                self.assertTrue(any(
+                    registro["tipo_registro"] == "classe_processual"
+                    and registro.get("classe") == classe
+                    for registro in registros
+                ))
+                self.assertEqual(
+                    [(item["tipo"], item["trecho"]) for item in candidatos(texto)],
+                    [("jurisprudencia", texto)],
+                )
+
+    def test_ro_geografico_nao_vira_citacao(self):
+        for texto in ("Investimentos em RO 2024 cresceram.", "A obra ocorreu em RO 123."):
+            with self.subTest(texto=texto):
+                self.assertEqual(candidatos(texto), [])
+
+    def test_ro_e_ro_eleitoral_na_mesma_frase_nao_sao_fundidos(self):
+        primeira = "RO 1984-03.2014.6.08.0000, TSE"
+        segunda = "RO-El 0600710-22.2022.6.12.0000, TSE"
+        texto = f"{primeira} e {segunda}"
+
+        self.assertEqual(
+            [(item["tipo"], item["trecho"]) for item in candidatos(texto)],
+            [("jurisprudencia", primeira), ("jurisprudencia", segunda)],
+        )
+
+    def test_apelacao_exige_correspondencia_exata(self):
+        texto = "Apelação 0027419-08, da Câmara de Família"
+        tokens = detector.criar_tokens(texto)
+        registros = detector.detectar_marcadores_e_indicios(texto, tokens)
+
+        self.assertTrue(any(
+            registro["tipo_registro"] == "marcador_principal"
+            and registro.get("marcador") == "apelacao"
+            and registro.get("similaridade") == 1.0
+            for registro in registros
+        ))
+        self.assertEqual(
+            [item["tipo"] for item in candidatos(texto)],
+            ["jurisprudencia"],
+        )
+
+    def test_apelante_nao_e_confundido_com_apelacao(self):
+        texto = (
+            "9293337-24.2018.7.15.8725\n"
+            "Apelante: TRANSPORTES MARAJÓ EIRELI\n"
+            "Apelado: Ministério Público Militar\n"
+            "Protocolo nº 2023.1475691"
+        )
+
+        self.assertEqual(candidatos(texto), [])
+
 
 class FiltrosDeDistratores(unittest.TestCase):
     def test_valor_da_causa_sem_cifrao_e_filtrado_pelo_contexto(self):

@@ -43,6 +43,7 @@ MARCADORES_NUMERADOS = set(_CLASSES["marcadores_numerados"])
 MARCADORES_LEGAIS_NUMERADOS = set(_DIPLOMAS["marcadores_numerados"])
 SIGLAS = set(_CLASSES["siglas"])
 SIGLAS_CLASSES_AMBIGUAS = _CLASSES.get("siglas_classes_ambiguas", {})
+MARCADORES_EXATOS = set(_CLASSES.get("marcadores_exatos", []))
 
 #para evitar que confuda com marcadores principais
 TERMOS_PRIORITARIOS_INDICIOS = (TERMOS_RELATORIA | TRIBUNAIS)
@@ -233,8 +234,7 @@ def procurar_classes_processuais_ambiguas(tokens):
         if token_anterior in regra.get("tokens_anteriores_bloqueados", []):
             continue
 
-        classes.append(
-            criar_registro("classe_processual",indice,indice,tokens,1,valor=sigla,classe=regra["classe"],))
+        classes.append(criar_registro("classe_processual", indice, indice, tokens, regra.get("pontos", 1),valor=sigla,classe=regra["classe"],categoria="jurisprudencia",))
 
     return classes
 
@@ -279,8 +279,11 @@ def procurar_marcadores_principais(tokens):
                     if expressao in marcadores_mesmo_tamanho:
                         marcador_encontrado = (categoria, expressao, 1.0, fim - 1)
                         break
-                    #expressão similar
-                    marcador, similaridade = encontrar_marcador_parecido( expressao, marcadores_mesmo_tamanho)
+                    #marcadores configurados como exatos não participam da correspondência aproximada.
+                    marcadores_aproximados = [ marcador for marcador in marcadores_mesmo_tamanho if marcador not in MARCADORES_EXATOS]
+
+                    marcador, similaridade = encontrar_marcador_parecido( expressao, marcadores_aproximados)
+                    
                     if marcador is not None:
                         marcador_encontrado = (categoria, marcador, similaridade, fim - 1)
                         break
@@ -524,21 +527,36 @@ def agrupar_registros(texto_original, registros):
         distancia = registro["inicio_token"] - anterior["fim_token"] - 1
         #soma um para incluir as bordas
         tamanho_grupo = registro["fim_token"] - grupo_atual[0]["inicio_token"] + 1
-        marcadores_do_grupo = []
+        inicios_citacao_do_grupo = []
 
         for item in grupo_atual:
-            if item["tipo_registro"] == "marcador_principal":
-                marcadores_do_grupo.append(item)
+            if item["tipo_registro"] in {"marcador_principal", "classe_processual"}:
+                inicios_citacao_do_grupo.append(item)
+
+        grupo_ja_tem_numero = any(item["tipo_registro"] in {"numero_processual", "numero_legal"} for item in grupo_atual)
+
+        novo_marcador_categoria_diferente = False
+
+        registro_inicia_citacao = registro["tipo_registro"] in {"marcador_principal", "classe_processual"}
+
+        if (registro_inicia_citacao and inicios_citacao_do_grupo and grupo_ja_tem_numero):
+            ultimo_inicio_citacao = inicios_citacao_do_grupo[-1]
+
+            categoria_anterior = ultimo_inicio_citacao.get("categoria")
+            categoria_atual = registro.get("categoria")
+
+            novo_marcador_categoria_diferente = (categoria_anterior is not None and categoria_atual is not None and categoria_anterior != categoria_atual)
+
 
         novo_marcador_distante = False
-        if registro["tipo_registro"] == "marcador_principal" and marcadores_do_grupo:
-            ultimo_marcador = marcadores_do_grupo[-1]
-            distancia_marcadores = (registro["inicio_token"] - ultimo_marcador["fim_token"] - 1)
+        if registro_inicia_citacao and inicios_citacao_do_grupo:
+            ultimo_inicio_citacao = inicios_citacao_do_grupo[-1]
+            distancia_marcadores = (registro["inicio_token"] - ultimo_inicio_citacao["fim_token"] - 1)
             #heurística para quando tem mais de uma citação na mesma frase/parágrafo. Parece boa
             novo_marcador_distante = (distancia_marcadores > _PIPELINE["distancia_marcadores_jurisprudencia"] and registro.get("categoria") == "jurisprudencia")
 
         #outra heurística que talvez precise ser ajustada para generalização
-        if (distancia <= _PIPELINE["distancia_maxima_grupo"] and tamanho_grupo <= _PIPELINE["tamanho_maximo_grupo"] and not novo_marcador_distante and not limite_entre_citacoes(texto_original, anterior, registro)):
+        if (distancia <= _PIPELINE["distancia_maxima_grupo"] and tamanho_grupo <= _PIPELINE["tamanho_maximo_grupo"] and not novo_marcador_distante and not novo_marcador_categoria_diferente and not limite_entre_citacoes(texto_original, anterior, registro)):
             grupo_atual.append(registro)
         else:
             grupos.append(grupo_atual)

@@ -7,13 +7,28 @@
     "ag instr", "ag reg", "habeas corpus", "h c", "hc", "rse", "apl", "rms", "rr",
     "arr", "ar", "embargos de declaracao", "ed", "edcl", "eds", "sumula", "sum",
     "sumula vinculante", "tema", "repercussao geral", "processo", "acordao", "julgado",
-    "precedente", "agr", "mandado de seguranca"
+    "precedente", "agr", "mandado de seguranca", "apelacao", "apelacao criminal",
+    "ap crim", "ap criminal"
   ],
+  "marcadores_exatos": ["apelacao"],
+
   "siglas": ["re", "resp", "aresp", "respe", "rhc", "hc", "rse", "apl", "rms", "rr", "arr", "ar", "rp", "agarr", "rcl", "recl", "agr", "agrg", "agint", "ed", "edcl", "eds"],
   "siglas_classes_ambiguas": {
     "ms": {
       "classe": "mandadodeseguranca",
-      "tokens_anteriores_bloqueados": ["de", "em"] }},
+      "tokens_anteriores_bloqueados": ["de", "em"]
+    },
+    "ro": {
+      "classe": "recursoordinario",
+      "pontos": 2,
+      "tokens_anteriores_bloqueados": ["de", "em"]
+    },
+    "ro-el": {
+      "classe": "recursoordinarioeleitoral",
+      "pontos": 2,
+      "tokens_anteriores_bloqueados": []
+    }
+  },
   "marcadores_descritivos": ["acordao", "julgado", "precedente", "reclamacao"],
   "marcadores_numerados": ["sumula", "sum", "sumula vinculante", "tema"],
   "classes_citadas": [
@@ -25,6 +40,7 @@
     {"padrao": "\\b(?:RHC|RECURSO\\s+EM\\s+HABEAS\\s+CORPUS)\\b", "classe": "recursoemhabeascorpus"},
     {"padrao": "\\b(?:HC|HABEAS\\s+CORPUS)\\b", "classe": "habeascorpus"},
     {"padrao": "\\b(?:RSE|RECURSO\\s+EM\\s+SENTIDO\\s+ESTRITO)\\b", "classe": "recursoemsentidoestrito"},
+    {"padrao": "\\b(?:AP\\.?\\s*CRIM\\.?|AP\\.?\\s*CRIMINAL|APELACAO\\s+CRIMINAL|APCRIM)(?=\\s|\\d|$)", "classe": "apelacaocriminal"},
     {"padrao": "\\b(?:APL|APELACAO)\\b", "classe": "apelacao"},
     {"padrao": "\\b(?:MANDADO\\s+DE\\s+SEGURANCA|MS\\b(?=\\s*(?:N[º°.]?\\s*)?\\d))", "classe": "mandadodeseguranca"},
     {"padrao": "\\bAIRR\\b", "classe": "agravodeinstrumentoemrecursoderevista"},
@@ -32,6 +48,7 @@
     {"padrao": "\\bRRAG\\b", "classe": "recursoderevistacomagravo"},
     {"padrao": "(?<!/)\\bRR\\b", "classe": "recursoderevista"},
     {"padrao": "\\bROT\\b", "classe": "recursoordinariotrabalhista"},
+    {"padrao": "\\b(?:RO[-\\s]?EL|RECURSO\\s+ORDINARIO\\s+ELEITORAL)\\b", "classe": "recursoordinarioeleitoral"},
     {"padrao": "\\b(?:RECURSO\\s+ORDINARIO|RO\\b(?=[\\s\\-]*(?:N[º°.]?\\s*)?\\d))", "classe": "recursoordinario"},
     {"padrao": "\\b(?:AGRAVO\\s+DE\\s+INSTRUMENTO|AI\\b(?=[\\s\\-]*(?:N[º°.]?\\s*)?\\d))", "classe": "agravodeinstrumento"},
     {"padrao": "\\bEMBARGOS\\s+INFRINGENTES\\b", "classe": "embargosinfringentes"},
