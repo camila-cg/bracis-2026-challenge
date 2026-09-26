@@ -10,6 +10,9 @@ dependencies = [
 ]
 
 [dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
 # notebooks de EDA em src/*.ipynb
 notebooks = [
     "ipykernel",

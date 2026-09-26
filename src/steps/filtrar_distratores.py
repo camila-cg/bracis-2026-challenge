@@ -42,7 +42,10 @@ NUMERO_PROCESSO = re.compile(
     r"|\d{5,}(?:[./-]\d+)*",
     re.I,
 )
-DISTRATOR = re.compile(r"R\$|\bfls?\.\s*\d|\bOAB\b|\bprotocolo\b", re.I)
+# Folhas dos autos: "fls. 234/567", mas também "fls 234", "fl. 12", "f. 45" e
+# "folhas 23". "f" sozinho só com ponto, para não pegar letra solta antes de número.
+FOLHAS = r"\b(?:fls?\.?|f\.|folhas?)\s*\d"
+DISTRATOR = re.compile(rf"R\$|{FOLHAS}|\bOAB\b|\bprotocolo\b", re.I)
 _RUBRICA_VALOR = (
     r"(?:valor\s+(?:atribu[ií]do\s+)?(?:da|à)\s+causa"
     r"|d[aá]-se\s+à\s+causa\s+o\s+valor)"
