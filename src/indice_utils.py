@@ -304,6 +304,18 @@ def _classe_citada(trecho: str) -> str | None:
     return None
 
 
+# Classe genérica citada ("APL") -> subclasses do cabeçalho que ela abrange
+# ("APELAÇÃO CRIMINAL" no STM). A citação da subclasse não casa com a genérica.
+SUBCLASSES = {
+    classe: frozenset(subs)
+    for classe, subs in carregar_config("classes_processuais").get("subclasses", {}).items()
+}
+
+
+def classes_compativeis(classe_citada: str, classe_registro: str) -> bool:
+    return classe_citada == classe_registro or classe_registro in SUBCLASSES.get(classe_citada, ())
+
+
 # Estágio recursal (AgInt, AgRg, EDcl, embargos de divergência) dentro da
 # mesma classe-base: "AgRg no REsp X" e "EDcl no AgRg no REsp X" são decisões
 # diferentes do mesmo processo. O balde de classe (CLASSES_CITADAS) ignora
@@ -329,7 +341,7 @@ def _compativel(trecho: str, tribunal: str, classe: str, uf: str | None) -> bool
         return False
     classe_citada = _classe_citada(trecho)
     classe_registro = _classe_citada(classe)
-    if classe_citada and classe_registro and classe_citada != classe_registro:
+    if classe_citada and classe_registro and not classes_compativeis(classe_citada, classe_registro):
         return False
     return True
 

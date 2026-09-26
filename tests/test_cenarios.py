@@ -48,6 +48,13 @@ class ResolucaoAcordaos(unittest.TestCase):
     def test_classe_divergente_nao_resolve(self):
         self.assertEqual(self.resolvedor.acordao("AREsp 1.741.784/PR")[:2], ("inventada", None))
 
+    def test_apl_generica_casa_apelacao_criminal_do_stm(self):
+        # O cabeçalho do STM diz "APELAÇÃO CRIMINAL"; a citação "APL" é a
+        # classe genérica e precisa continuar compatível com ela.
+        self.assertEqual(
+            self.resolvedor.acordao("APL 7000136-79.2023.7.00.0000/RS")[:2], ("real", 2161632985)
+        )
+
     def test_fallback_fts_tambem_filtra_metadados(self):
         with patch.object(ind, "resolver", return_value=set()):
             self.assertEqual(self.resolvedor.acordao("REsp 1.741.784/SC")[:2], ("inventada", None))
