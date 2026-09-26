@@ -2,6 +2,73 @@
 
 Encontre citações de jurisprudência e lei em documentos e classifique cada uma como real, inventada ou incompleta. Jusbrasil × BRACIS 2026.
 
+## Reprodução e submissão
+
+A solução usa só regras (regex) e consultas à base canônica SQLite. Não usa
+modelos de linguagem, GPU nem internet durante a execução, e a saída é
+determinística: a mesma entrada gera sempre o mesmo `submission.csv`.
+
+### Ambiente
+
+- Python 3.12 (fixado em `.python-version`; funciona a partir de 3.10);
+- [uv](https://docs.astral.sh/uv/) com `pyproject.toml` + `uv.lock` (versões travadas);
+  sem uv, use `requirements.txt` (ver [SETUP.md](SETUP.md)).
+
+### Dados
+
+Os dados do desafio não estão no repositório (distribuição restrita). Coloque-os assim:
+
+```
+data/txt/                    documentos de entrada (<documento_id>.txt)
+data/desafio1_bracis.db      base canônica
+data/goldenset_offsets.csv   gabarito (só para --avaliar)
+```
+
+`data/json_to_submission.py` e `data/kaggle_metric.py` são os scripts oficiais do material.
+
+### Comando que reproduz as saídas
+
+```bash
+uv sync --no-default-groups
+uv run --no-default-groups python src/pipeline.py
+```
+
+Gera `saida/json/<documento_id>.json` (um por documento) e `saida/submission.csv`.
+Com `--avaliar`, também pontua contra o gabarito usando a métrica oficial.
+
+**Alternativa com Docker** (mesmas versões do `uv.lock`; os dados são montados, não copiados para a imagem):
+
+```bash
+docker build -t bracis-2026 .
+docker run --rm -v "$PWD/data:/app/data" -v "$PWD/saida:/app/saida" bracis-2026
+```
+
+Argumentos após o nome da imagem vão para o pipeline (ex.: `... bracis-2026 --avaliar`).
+No PowerShell, troque `$PWD` por `${PWD}`.
+
+### Submeter no Kaggle
+
+```bash
+uv run python src/empacotar_submissao.py
+```
+
+Valida o `submission.csv` (cabeçalho, um `documento_id` por `.txt`, nenhuma célula
+vazia, formato de cada citação) e cria `saida/submissao_<commit>/` com:
+
+- `submission.csv` / `submission.zip`: o arquivo enviado no Kaggle
+  (*Submit Prediction → File Upload*). Na descrição da submissão, anote o commit;
+- `bundle_<commit>.zip`: o código exatamente nesse commit e um `comando.txt`,
+  para a verificação de reprodutibilidade.
+
+O script exige que as mudanças estejam commitadas, para o commit do nome ser o
+que de fato gerou as saídas.
+
+### Testes
+
+```bash
+uv run pytest
+```
+
 ## Overview
 
 ### Configuração do pipeline
