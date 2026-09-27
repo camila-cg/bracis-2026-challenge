@@ -72,4 +72,5 @@ def normalizar_citacao(candidato: dict, familia: Familia, *, ja_normalizado: boo
         vinculante=bool(_VINCULANTE.search(trecho)) if familia == "sumula" else False,
         lei_numerada=bool(_LEI_NUMERADA.search(trecho)) if familia == "lei" else False,
         identificador_suficiente=tem_identificador(trecho),
+        fonte=candidato.get("fonte", "regra"),
     )

@@ -62,7 +62,7 @@ def processar_documento(documento_id: str, texto: str, resolvedor: Resolvedor) -
         rota = rotear(candidato)                                       # 3
         citacao = normalizar_citacao(candidato, rota)                   # 4
         resultado = resolvedor.resolver_citacao(citacao)               # 5
-        confianca = atribuir_confianca(resultado.caminho)             # 6
+        confianca = atribuir_confianca(resultado.caminho, citacao.fonte)  # 6
         citacoes.append({
             "inicio": candidato["inicio"],
             "fim": candidato["fim"],
@@ -74,6 +74,7 @@ def processar_documento(documento_id: str, texto: str, resolvedor: Resolvedor) -
             "caminho": resultado.caminho,
             "cobertura": resultado.cobertura,
             "motivo": resultado.motivo,
+            "fonte": citacao.fonte,
         })
     return {"documento_id": documento_id, "citacoes": citacoes}
 

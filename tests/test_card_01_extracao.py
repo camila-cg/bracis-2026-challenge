@@ -282,6 +282,48 @@ class FiltrosDeDistratores(unittest.TestCase):
             with self.subTest(trecho=trecho):
                 self.assertTrue(e_distrator({"inicio": 0, "fim": len(trecho), "trecho": trecho}, trecho))
 
+    def test_titulo_de_secao_numerada_e_reconhecido(self):
+        # "I — RELATÓRIO" (numeração + travessão) é o formato real usado em
+        # data/txt/gen_n2_010.txt — TITULO_CORPO exigia a linha ser só a
+        # palavra do título, sem numeração.
+        texto = "Interessado: FULANO\n\nI — RELATÓRIO\n\nConforme REsp 1.741.784/PR."
+        ctx = analisar_contexto(texto)
+        self.assertEqual(ctx.corpo_inicio, texto.index("I — RELATÓRIO"))
+
+    def test_rotulo_com_ruido_de_ocr_e_reconhecido_pelo_fallback_generico(self):
+        # "Apelãdo:" (ruído de OCR a->ã em "Apelado") é o caso real de
+        # data/txt/gen_n2_013.txt — fora da enumeração de ROTULO, mas
+        # reconhecido pelo fallback estrutural porque já há um campo antes.
+        texto = "Processo 123456\nApelãdo: Ministério Público\n\nACÓRDÃO\nConforme REsp 1.741.784/PR."
+        ctx = analisar_contexto(texto)
+        rotulos = {c.rotulo for c in ctx.campos}
+        self.assertIn("apelãdo", rotulos)
+
+    def test_rotulos_de_parte_fora_da_enumeracao_sao_filtrados(self):
+        # Vocabulário plausível nos 60% de documentos ocultos, que não está
+        # na enumeração fixa de ROTULO — cobertos pelo fallback estrutural.
+        for rotulo in ("Embargante", "Embargado", "Exequente", "Executado",
+                       "Denunciado", "Litisconsorte", "Terceiro Interessado"):
+            with self.subTest(rotulo=rotulo):
+                texto = f"Processo 123456\n{rotulo}: FULANO DE TAL\n\nACÓRDÃO\nConforme REsp 1.741.784/PR."
+                citacao = "REsp 1.741.784/PR"
+                inicio = texto.index(citacao)
+                item = {"inicio": inicio, "fim": inicio + len(citacao), "trecho": citacao}
+                self.assertEqual(filtrar_distratores([item], texto), [item])
+                nome_campo = texto.index(rotulo)
+                campo = {"inicio": nome_campo, "fim": nome_campo + len(rotulo), "trecho": rotulo}
+                self.assertTrue(e_distrator(campo, texto))
+
+    def test_fallback_generico_nao_ativa_sem_campo_reconhecido_antes(self):
+        # Sem nenhum campo de ROTULO reconhecido antes, um "Palavra: citação"
+        # solto não deve ser tratado como cabeçalho (ex.: "Antes: REsp .../PR"
+        # é só uma citação com prefixo qualquer, não um documento real).
+        texto = "Antes: REsp 1.741.784/PR."
+        citacao = "REsp 1.741.784/PR"
+        inicio = texto.index(citacao)
+        item = {"inicio": inicio, "fim": inicio + len(citacao), "trecho": citacao}
+        self.assertEqual(filtrar_distratores([item], texto), [item])
+
     def test_cabecalho_longo_e_filtrado_pelo_rotulo(self):
         prefixo = "PODER JUDICIÁRIO\n" * 30
         trecho = "Processo 123456"
