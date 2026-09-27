@@ -71,6 +71,16 @@ class ResolucaoAcordaos(unittest.TestCase):
         # comportamento anterior (resolve pelo número, único candidato).
         self.assertEqual(self.resolvedor.acordao("AgInt na Rcl 36.670/SP")[:2], ("real", 2679568224))
 
+    def test_apelacao_generica_resolve_registro_de_apelacao_criminal(self):
+        # A citação diz só "APL" (genérico); o acórdão real no STM tem
+        # classe "APELAÇÃO CRIMINAL" (mais específica). Exigir bater
+        # exatamente zerava candidatos reais — a citação nunca teve como
+        # informar que era criminal.
+        self.assertEqual(
+            self.resolvedor.acordao("APL 7000449-40.2023.7.00.0000/RS")[:2],
+            ("real", 5665364632),
+        )
+
 
 class ResolucaoNormativos(unittest.TestCase):
     @classmethod

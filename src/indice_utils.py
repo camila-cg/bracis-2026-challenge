@@ -304,6 +304,18 @@ def _classe_citada(trecho: str) -> str | None:
     return None
 
 
+# Pares onde uma classe é uma especialização textual de outra (ex. "apelação
+# criminal" é uma "apelação"). A citação às vezes usa só o termo genérico
+# ("APL") sem informar a especialização — isso não é sinal de incompatibilidade,
+# só falta de detalhe. Direção única: citação genérica aceita registro
+# específico; citação que já especifica continua exigindo bater exatamente.
+CLASSES_GENERICAS: dict[str, str] = carregar_config("classes_processuais").get("classes_genericas", {})
+
+
+def _classe_compativel(classe_citada: str, classe_registro: str) -> bool:
+    return classe_citada == classe_registro or CLASSES_GENERICAS.get(classe_registro) == classe_citada
+
+
 # Estágio recursal (AgInt, AgRg, EDcl, embargos de divergência) dentro da
 # mesma classe-base: "AgRg no REsp X" e "EDcl no AgRg no REsp X" são decisões
 # diferentes do mesmo processo. O balde de classe (CLASSES_CITADAS) ignora

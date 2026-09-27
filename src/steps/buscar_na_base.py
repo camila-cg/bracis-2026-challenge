@@ -118,7 +118,8 @@ class Resolvedor:
         return (
             (not citacao.tribunal or citacao.tribunal == tribunal)
             and (not citacao.uf or not uf or citacao.uf == uf)
-            and (not citacao.classe or not classe_registro or citacao.classe == classe_registro)
+            and (not citacao.classe or not classe_registro
+                 or ind._classe_compativel(citacao.classe, classe_registro))
         )
 
     def _filtrar_ids(self, citacao: CitacaoNormalizada, ids: set[int]) -> set[int]:
