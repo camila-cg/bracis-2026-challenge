@@ -38,7 +38,7 @@ import eda_utils as u
 import indice_utils as ind  # noqa: F401 — usado por src/validacao via p.ind
 from steps.pipeline_utils import DADOS, RAIZ
 from steps.extrair_candidatos import extrair                  # 1
-from steps.filtrar_distratores import filtrar_distratores     # 2
+from steps.filtrar_distratores import e_distrator, filtrar_distratores     # 2
 from steps.rotear_citacao import rotear                       # 3
 from steps.normalizar_citacao import normalizar_citacao        # 4
 from steps.buscar_na_base import Resolvedor                    # 5
@@ -54,16 +54,35 @@ def ler_texto(arquivo: Path) -> str:
     return bruto.decode("utf-8")
 
 
-def processar_documento(documento_id: str, texto: str, resolvedor: Resolvedor) -> dict:
+def processar_documento(
+    documento_id: str,
+    texto: str,
+    resolvedor: Resolvedor,
+    detector_bio=None,
+    limiares_modelo: dict[str, float] | None = None,
+) -> dict:
     candidatos = extrair(texto)                                        # 1
     candidatos = filtrar_distratores(candidatos, texto)                # 2
+    eventos_deteccao = []
+    if detector_bio is not None:
+        from ml_citacoes.fusao import fusionar
+
+        fusao = fusionar(
+            candidatos,
+            detector_bio.detectar(texto),
+            texto,
+            limiares=limiares_modelo or {"LEI": 0.95, "JUR": 0.95},
+            filtro_distrator=e_distrator,
+        )
+        candidatos = list(fusao.candidatos)
+        eventos_deteccao = list(fusao.eventos)
     citacoes = []
     for candidato in candidatos:
         rota = rotear(candidato)                                       # 3
         citacao = normalizar_citacao(candidato, rota)                   # 4
         resultado = resolvedor.resolver_citacao(citacao)               # 5
         confianca = atribuir_confianca(resultado.caminho, citacao.fonte)  # 6
-        citacoes.append({
+        saida = {
             "inicio": candidato["inicio"],
             "fim": candidato["fim"],
             "trecho": candidato["trecho"],
@@ -75,8 +94,14 @@ def processar_documento(documento_id: str, texto: str, resolvedor: Resolvedor) -
             "cobertura": resultado.cobertura,
             "motivo": resultado.motivo,
             "fonte": citacao.fonte,
-        })
-    return {"documento_id": documento_id, "citacoes": citacoes}
+        }
+        if "evidencia_deteccao" in candidato:
+            saida["evidencia_deteccao"] = candidato["evidencia_deteccao"]
+        citacoes.append(saida)
+    documento = {"documento_id": documento_id, "citacoes": citacoes}
+    if detector_bio is not None:
+        documento["eventos_deteccao"] = eventos_deteccao
+    return documento
 
 
 def main() -> None:
@@ -86,6 +111,9 @@ def main() -> None:
     parser.add_argument("--saida", type=Path, default=RAIZ / "saida")
     parser.add_argument("--avaliar", action="store_true", help="pontua contra data/goldenset_offsets.csv")
     parser.add_argument("--goldenset", type=Path, default=DADOS / "goldenset_offsets.csv")
+    parser.add_argument("--modelo-citacoes", type=Path, help="artefato LoRA local; omitido mantém regras idênticas")
+    parser.add_argument("--limiar-lei", type=float, default=0.95)
+    parser.add_argument("--limiar-jur", type=float, default=0.95)
     args = parser.parse_args()
 
     arquivos = sorted(args.txt.glob("*.txt"))
@@ -93,8 +121,22 @@ def main() -> None:
         sys.exit(f"nenhum .txt em {args.txt}")
     con = sqlite3.connect(u._uri_sqlite(args.db.resolve()) + "?immutable=1", uri=True)
     resolvedor = Resolvedor(con)
+    detector_bio = None
+    if args.modelo_citacoes is not None:
+        from ml_citacoes.inferencia import DetectorBIO
 
-    documentos = [processar_documento(a.stem, ler_texto(a), resolvedor) for a in arquivos]  # 1–6
+        detector_bio = DetectorBIO.de_artefato(args.modelo_citacoes)
+
+    documentos = [
+        processar_documento(
+            a.stem,
+            ler_texto(a),
+            resolvedor,
+            detector_bio,
+            {"LEI": args.limiar_lei, "JUR": args.limiar_jur},
+        )
+        for a in arquivos
+    ]  # 1–6
     submission_csv = gravar_saida(documentos, args.saida)                                   # 7
 
     if args.avaliar:
