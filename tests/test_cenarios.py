@@ -15,8 +15,10 @@ RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "src"))
 
 import indice_utils as ind
+from modelos import CitacaoNormalizada
 from steps.buscar_na_base import Resolvedor
 from steps.atribuir_confianca import atribuir_confianca
+from steps.normalizar_citacao import normalizar_citacao
 from steps.normalizar_numeros import normalizar_trecho
 from steps.pipeline_utils import BLOCO_NUMERICO
 from steps.salvar_submissao import gravar_saida
@@ -77,6 +79,16 @@ class ResolucaoAcordaos(unittest.TestCase):
         # estágio não pode filtrar isso a zero — precisa cair pro
         # comportamento anterior (resolve pelo número, único candidato).
         self.assertEqual(self.resolvedor.acordao("AgInt na Rcl 36.670/SP")[:2], ("real", 2679568224))
+
+    def test_apelacao_generica_resolve_registro_de_apelacao_criminal(self):
+        # A citação diz só "APL" (genérico); o acórdão real no STM tem
+        # classe "APELAÇÃO CRIMINAL" (mais específica). Exigir bater
+        # exatamente zerava candidatos reais — a citação nunca teve como
+        # informar que era criminal.
+        self.assertEqual(
+            self.resolvedor.acordao("APL 7000449-40.2023.7.00.0000/RS")[:2],
+            ("real", 5665364632),
+        )
 
 
 class ResolucaoNormativos(unittest.TestCase):
@@ -149,6 +161,42 @@ class NormalizacaoDeIdentificadores(unittest.TestCase):
             resolvedor = Resolvedor(con)
             trecho = normalizar_trecho("REsp 1.741.784 - 2024/PR")
             self.assertEqual(resolvedor.acordao(trecho)[:2], ("real", 2566535283))
+
+
+class FonteDaCitacao(unittest.TestCase):
+    """Hook pra distinguir citações vindas das regras fixas vs. de um
+    extrator alternativo (ex. o modelo generalizável da Giovanna). O desconto
+    é 0.0 hoje de propósito — o modelo ainda não existe pra calibrar — então
+    isto documenta que o hook não muda nada até alguém ajustar o desconto.
+    """
+
+    def test_citacao_normalizada_sem_fonte_explicita_assume_regra(self):
+        candidato = {"trecho": "REsp 1.741.784/PR", "inicio": 0, "fim": 18}
+        citacao = normalizar_citacao(candidato, "acordao", ja_normalizado=True)
+        self.assertEqual(citacao.fonte, "regra")
+
+    def test_citacao_normalizada_propaga_fonte_do_candidato(self):
+        candidato = {"trecho": "REsp 1.741.784/PR", "inicio": 0, "fim": 18, "fonte": "modelo"}
+        citacao = normalizar_citacao(candidato, "acordao", ja_normalizado=True)
+        self.assertEqual(citacao.fonte, "modelo")
+
+    def test_fonte_modelo_ainda_e_placeholder_neutro(self):
+        # Quando o desconto for calibrado com dados reais do modelo, este
+        # teste precisa ser atualizado de propósito — não é pra continuar
+        # passando sem mais ninguém perceber a mudança de comportamento.
+        base = atribuir_confianca("lei_real")
+        self.assertEqual(atribuir_confianca("lei_real", "regra"), base)
+        self.assertEqual(atribuir_confianca("lei_real", "modelo"), base)
+
+    def test_desconto_fonte_modelo_nunca_sai_do_intervalo_0_1(self):
+        # Um desconto negativo vira bônus (1 - desconto > 1) e um desconto
+        # maior que 1 vira negativo — os dois estourariam [0, 1], o que a
+        # métrica do desafio rejeita pra submissão inteira. O resultado tem
+        # que ficar sempre dentro do intervalo, não importa o desconto.
+        with patch("steps.atribuir_confianca.DESCONTO_FONTE_MODELO", -0.5):
+            self.assertEqual(atribuir_confianca("acordao_indice", "modelo"), 1.0)
+        with patch("steps.atribuir_confianca.DESCONTO_FONTE_MODELO", 1.5):
+            self.assertEqual(atribuir_confianca("acordao_indice", "modelo"), 0.0)
 
 
 class SaidaDaSubmissao(unittest.TestCase):

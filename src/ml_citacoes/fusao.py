@@ -1,0 +1,111 @@
+"""Fusão conservadora: regras são preservadas e o modelo apenas acrescenta."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Callable, Iterable
+
+from .contratos import CitacaoModelo, EvidenciaDeteccao
+
+
+@dataclass(frozen=True, slots=True)
+class ResultadoFusao:
+    candidatos: tuple[dict, ...]
+    eventos: tuple[dict, ...]
+
+
+def iou(a_inicio: int, a_fim: int, b_inicio: int, b_fim: int) -> float:
+    intersecao = max(0, min(a_fim, b_fim) - max(a_inicio, b_inicio))
+    if not intersecao:
+        return 0.0
+    return intersecao / (max(a_fim, b_fim) - min(a_inicio, b_inicio))
+
+
+def fusionar(
+    regras: list[dict],
+    modelo: Iterable[CitacaoModelo],
+    texto: str,
+    *,
+    limiares: dict[str, float],
+    filtro_distrator: Callable[[dict, str], bool],
+    iou_minimo: float = 0.5,
+    iou_nms: float = 0.5,
+) -> ResultadoFusao:
+    candidatos = [dict(item) for item in regras]
+    eventos: list[dict] = []
+    somente_modelo: list[tuple[CitacaoModelo, dict]] = []
+    usados_por_regra: set[int] = set()
+    predicoes = list(modelo)
+
+    for indice_regra, regra in enumerate(regras):
+        sobrepostos = [
+            (indice, pred, iou(regra["inicio"], regra["fim"], pred.inicio, pred.fim))
+            for indice, pred in enumerate(predicoes)
+        ]
+        sobrepostos = [item for item in sobrepostos if item[2] >= iou_minimo]
+        usados_por_regra.update(item[0] for item in sobrepostos)
+        mesmo_tipo = [item for item in sobrepostos if item[1].tipo_pipeline == regra["tipo"]]
+        if mesmo_tipo:
+            indice, pred, valor_iou = max(mesmo_tipo, key=lambda item: item[2])
+            evidencia = EvidenciaDeteccao(
+                "ambos", pred.tipo_pipeline, pred.score_bruto, pred.score_calibrado,
+                valor_iou, "concordancia", pred.transformacoes_ocr,
+            )
+        elif sobrepostos:
+            indice, pred, valor_iou = max(sobrepostos, key=lambda item: item[2])
+            evidencia = EvidenciaDeteccao(
+                "regra", pred.tipo_pipeline, pred.score_bruto, pred.score_calibrado,
+                valor_iou, "discordancia_tipo", pred.transformacoes_ocr,
+            )
+        else:
+            evidencia = EvidenciaDeteccao("regra", relacao="somente_regra")
+        candidatos[indice_regra]["evidencia_deteccao"] = evidencia.como_dict()
+        eventos.append(evidencia.como_dict() | {"inicio": regra["inicio"], "fim": regra["fim"]})
+
+    for indice, pred in enumerate(predicoes):
+        if indice in usados_por_regra:
+            continue
+        score = pred.score_calibrado if pred.score_calibrado is not None else pred.score_bruto
+        if score < limiares[pred.tipo]:
+            continue
+        candidato = {
+            "tipo": pred.tipo_pipeline,
+            "fonte": "modelo",
+            "inicio": pred.inicio,
+            "fim": pred.fim,
+            "trecho": texto[pred.inicio:pred.fim],
+            "pontuacao": 0,
+            "registros": [],
+        }
+        if filtro_distrator(candidato, texto):
+            continue
+        evidencia = EvidenciaDeteccao(
+            "modelo", pred.tipo_pipeline, pred.score_bruto, pred.score_calibrado,
+            None, "somente_modelo", pred.transformacoes_ocr,
+        )
+        candidato["evidencia_deteccao"] = evidencia.como_dict()
+        somente_modelo.append((pred, candidato))
+
+    for pred, candidato in _nms(somente_modelo, iou_nms):
+        candidatos.append(candidato)
+        eventos.append(candidato["evidencia_deteccao"] | {"inicio": pred.inicio, "fim": pred.fim})
+    candidatos.sort(key=lambda item: (item["inicio"], item["fim"], item["tipo"]))
+    return ResultadoFusao(tuple(candidatos), tuple(eventos))
+
+
+def _nms(itens: list[tuple[CitacaoModelo, dict]], limite: float) -> list[tuple[CitacaoModelo, dict]]:
+    ordenados = sorted(
+        itens,
+        key=lambda item: item[0].score_calibrado if item[0].score_calibrado is not None else item[0].score_bruto,
+        reverse=True,
+    )
+    mantidos: list[tuple[CitacaoModelo, dict]] = []
+    for item in ordenados:
+        pred = item[0]
+        if any(
+            pred.tipo == outro[0].tipo and iou(pred.inicio, pred.fim, outro[0].inicio, outro[0].fim) >= limite
+            for outro in mantidos
+        ):
+            continue
+        mantidos.append(item)
+    return mantidos

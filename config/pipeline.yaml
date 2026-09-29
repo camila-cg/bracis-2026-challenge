@@ -11,5 +11,6 @@
     "lei_ambigua": 0.50, "sumula_ambigua": 0.50,
     "tema": 0.85, "descritiva": 0.90, "acordao_indice": 0.97,
     "acordao_fts": 0.90, "acordao_zero": 0.85, "acordao_ambigua": 0.50
-  }
+  },
+  "desconto_fonte_modelo": 0.0
 }

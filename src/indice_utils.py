@@ -304,16 +304,16 @@ def _classe_citada(trecho: str) -> str | None:
     return None
 
 
-# Classe genérica citada ("APL") -> subclasses do cabeçalho que ela abrange
-# ("APELAÇÃO CRIMINAL" no STM). A citação da subclasse não casa com a genérica.
-SUBCLASSES = {
-    classe: frozenset(subs)
-    for classe, subs in carregar_config("classes_processuais").get("subclasses", {}).items()
-}
+# Pares onde uma classe é uma especialização textual de outra (ex. "apelação
+# criminal" é uma "apelação"). A citação às vezes usa só o termo genérico
+# ("APL") sem informar a especialização — isso não é sinal de incompatibilidade,
+# só falta de detalhe. Direção única: citação genérica aceita registro
+# específico; citação que já especifica continua exigindo bater exatamente.
+CLASSES_GENERICAS: dict[str, str] = carregar_config("classes_processuais").get("classes_genericas", {})
 
 
-def classes_compativeis(classe_citada: str, classe_registro: str) -> bool:
-    return classe_citada == classe_registro or classe_registro in SUBCLASSES.get(classe_citada, ())
+def _classe_compativel(classe_citada: str, classe_registro: str) -> bool:
+    return classe_citada == classe_registro or CLASSES_GENERICAS.get(classe_registro) == classe_citada
 
 
 # Estágio recursal (AgInt, AgRg, EDcl, embargos de divergência) dentro da

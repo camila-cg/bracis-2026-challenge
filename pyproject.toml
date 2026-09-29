@@ -19,6 +19,13 @@ notebooks = [
     "jupyterlab",
     "matplotlib",
 ]
+ml = [
+    "torch>=2.2,<3",
+    "transformers>=4.45,<5",
+    "peft>=0.13,<1",
+    "accelerate>=1,<2",
+    "numpy>=1.26,<3",
+]
 
 [tool.uv]
 package = false

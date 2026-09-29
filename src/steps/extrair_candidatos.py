@@ -11,9 +11,12 @@ PONTUACAO_MINIMA = carregar_config("pipeline")["pontuacao_minima"]
 
 
 def extrair(texto: str) -> list[dict]:
-    """Candidatos com inicio, fim, trecho, tipo e pontuação acima do piso."""
+    """Candidatos com inicio, fim, trecho, tipo, fonte e pontuação acima do piso."""
     tokens = dc.criar_tokens(texto)
     registros = dc.detectar_marcadores_e_indicios(texto, tokens)
     grupos = dc.agrupar_registros(texto, registros)
     candidatos = dc.formar_candidatos(texto, tokens, grupos)
-    return [c for c in candidatos if c["pontuacao"] >= PONTUACAO_MINIMA]
+    # "fonte" identifica se o candidato veio das regras fixas (aqui) ou de um
+    # extrator alternativo (ex. o modelo generalizável) — usado por
+    # atribuir_confianca para diferenciar a confiança entre as duas origens.
+    return [{**c, "fonte": "regra"} for c in candidatos if c["pontuacao"] >= PONTUACAO_MINIMA]

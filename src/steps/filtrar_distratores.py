@@ -34,9 +34,17 @@ ROTULO = re.compile(
     re.I,
 )
 TITULO_CORPO = re.compile(
-    r"^\s*(?:AC[ÓO]RD[ÃA]O|DECIS[ÃA]O(?:\s+MONOCR[ÁA]TICA)?|MEMORIAL|EMENTA|RELAT[ÓO]RIO|VOTO|FUNDAMENTA[ÇC][ÃA]O)\s*$",
+    r"^\s*(?:(?:[IVXLCDM]+|\d{1,2})\s*[-–—.)]\s*)?"
+    r"(?:AC[ÓO]RD[ÃA]O|DECIS[ÃA]O(?:\s+MONOCR[ÁA]TICA)?|MEMORIAL|EMENTA|RELAT[ÓO]RIO|VOTO|FUNDAMENTA[ÇC][ÃA]O)\s*$",
     re.I,
 )
+# Fallback estrutural para rótulos de cabeçalho fora da enumeração de ROTULO
+# (ex. "Embargante:", "Exequente:", "Executado:", "Denunciado:") e para ruído
+# de OCR dentro do próprio rótulo (ex. "Apelãdo:"). Só é consultado quando
+# ROTULO não bate — nunca compete com os casos especiais de processo/autos/
+# valor da causa, que continuam resolvidos só por ROTULO. Exige maiúscula
+# inicial pra reduzir a chance de casar conectivo de prosa em minúscula.
+ROTULO_GENERICO = re.compile(r"^\s*(?P<rotulo>[A-ZÀ-Ú][^\W\d_]*(?:[ ][^\W\d_]+){0,3})\s*:")
 NUMERO_PROCESSO = re.compile(
     r"(?:TST-[A-Z-]+-)?\d{1,7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}"
     r"|\d{5,}(?:[./-]\d+)*",
@@ -75,6 +83,15 @@ def analisar_contexto(texto: str) -> ContextoDocumento:
             separador = linha[m.end("rotulo"):].lstrip()
             if rotulo_bruto not in {"processo", "autos", "memorial"} and not rotulo_bruto.startswith("valor") and not separador.startswith(":"):
                 m = None
+        if not m and encontrou_campo:
+            # Só consultado depois que pelo menos um campo já foi reconhecido
+            # por ROTULO — ou seja, já sabemos que estamos dentro de um bloco
+            # de cabeçalho de verdade. Sem essa trava, a primeira linha de um
+            # texto qualquer com "Palavra: citação" (ex. "Antes: REsp .../PR")
+            # seria tratada como cabeçalho por engano.
+            m = ROTULO_GENERICO.match(linha)
+            if m:
+                rotulo_bruto = re.sub(r"\s+", " ", m.group("rotulo").lower())
         if m:
             encontrou_campo = True
             rotulo = rotulo_bruto

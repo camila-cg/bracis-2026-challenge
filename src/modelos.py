@@ -8,6 +8,7 @@ from typing import Literal
 Familia = Literal["lei", "sumula", "tema", "descritiva", "acordao"]
 Classe = Literal["real", "inventada", "incompleta"]
 Cobertura = Literal["indexada", "fora_base", "nao_consultada"]
+Fonte = Literal["regra", "modelo"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +29,7 @@ class CitacaoNormalizada:
     vinculante: bool = False
     lei_numerada: bool = False
     identificador_suficiente: bool = False
+    fonte: Fonte = "regra"
 
 
 @dataclass(frozen=True, slots=True)

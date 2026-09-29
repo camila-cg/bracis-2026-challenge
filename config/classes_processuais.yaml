@@ -63,8 +63,8 @@
     {"padrao": "\\bAGRAVO\\s+INTERNO\\b", "classe": "agravointerno"},
     {"padrao": "\\bEMBARGOS\\s+DE\\s+DECLARACAO\\b", "classe": "embargosdedeclaracao"}
   ],
-  "subclasses": {
-    "apelacao": ["apelacaocriminal"]
+  "classes_genericas": {
+    "apelacaocriminal": "apelacao"
   },
   "modificadores_recursais": [
     {"padrao": "\\bAG\\s*INT\\b|\\bAGRAVO\\s+INTERNO\\b", "modificador": "agravo_interno"},
