@@ -162,7 +162,28 @@ def conexao_padrao() -> sqlite3.Connection:
 
 # Número no padrão CNJ. A parte sequencial tem 7 dígitos no padrão oficial, mas
 # TST e TSE frequentemente a escrevem sem os zeros à esquerda (ARR-213-85.2010...).
-CNJ = re.compile(r"\d{1,7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}")
+#
+# As fronteiras de dígito são parte do contrato: sem elas, o regex encontrava
+# um CNJ válido dentro de um identificador adulterado, por exemplo
+# ``97000136-79.2023.7.00.0000`` -> ``7000136-79.2023.7.00.0000``.
+CNJ = re.compile(
+    r"(?<!\d)(?<!\d[./–—-])(?P<sequencial>\d{1,7})-"
+    r"(?P<dv>\d{2})\.(?P<ano>\d{4})\.(?P<segmento>\d)\."
+    r"(?P<tribunal>\d{2})\.(?P<origem>\d{4})(?!\d)(?![./–—-]\s*\d)"
+)
+
+_SEPARADOR_NUMERICO = r"[./–—-]"
+
+# Forma usada como chave no índice de acórdãos: sequencial oficial com sete
+# dígitos, hífen e os 13 dígitos estruturados restantes sem pontuação.
+_CHAVE_CNJ = re.compile(
+    r"(?<!\d)(?P<sequencial>\d{7})-(?P<fim>\d{13})(?!\d)"
+)
+
+# Se há o início inequívoco de um CNJ, mas o padrão estrito não fecha, não
+# devemos reinterpretar apenas o sequencial como um número livre. Esse bloqueio
+# evita que um identificador malformado escape para o fallback genérico.
+_CANDIDATO_CNJ = re.compile(r"(?<!\d)\d+-\d{2}\.")
 
 # Número no estilo STF/STJ: 1.741.784 / 1741784 / 1.741. 784
 NUMERO_LIVRE = re.compile(r"\d[\d.\s]{2,}\d|\d{3,}")
@@ -174,17 +195,40 @@ NUMERO_LIVRE = re.compile(r"\d[\d.\s]{2,}\d|\d{3,}")
 # classe processual ("RESP" viraria "RE5P").
 OCR_PARA_DIGITO = carregar_config("regras_ocr")["letra_para_digito"]
 
-_LETRAS_OCR = re.escape("".join(letra for letra in OCR_PARA_DIGITO if letra != "|"))
-_TOKEN_NUMERICO = re.compile(rf"[0-9][0-9{_LETRAS_OCR}.\s-]*[0-9{_LETRAS_OCR}]")
+_LETRAS_OCR = re.escape("".join(OCR_PARA_DIGITO))
+_CARACTERES_NUMERICOS_OCR = "0-9" + _LETRAS_OCR
+_CNJ_COM_OCR = re.compile(
+    rf"(?<![A-Za-z0-9])[{_CARACTERES_NUMERICOS_OCR}]{{1,7}}-"
+    rf"[{_CARACTERES_NUMERICOS_OCR}]{{2}}\."
+    rf"[{_CARACTERES_NUMERICOS_OCR}]{{4}}\."
+    rf"[{_CARACTERES_NUMERICOS_OCR}]\."
+    rf"[{_CARACTERES_NUMERICOS_OCR}]{{2}}\."
+    rf"[{_CARACTERES_NUMERICOS_OCR}]{{4}}(?![A-Za-z0-9])"
+)
+_LETRA_ADJACENTE_A_DIGITO = re.compile(
+    rf"\d[.\s/–—-]*[{_LETRAS_OCR}]+(?=[.\s/–—-]*\d)|"
+    rf"(?<=\d)[{_LETRAS_OCR}]{{2,}}(?![A-Za-z])|"
+    rf"(?<=\d\.)[{_LETRAS_OCR}]{{2,}}(?=(?:[.\s\-]*\d|$))|"
+    rf"(?<![A-Za-z])[{_LETRAS_OCR}]{{1,2}}(?=\d)|"
+    rf"(?<=\d)[{_LETRAS_OCR}](?![A-Za-z])|"
+    rf"(?<=\d\.)[{_LETRAS_OCR}](?=\d)"
+)
 
 
 def corrigir_ocr_em_numeros(texto: str) -> str:
-    """Troca letra por dígito apenas dentro de tokens que já parecem número."""
+    """Corrige OCR numérico sem atravessar prefixos, classes ou tribunais."""
 
-    def _troca(m: re.Match) -> str:
-        return "".join(OCR_PARA_DIGITO.get(c, c) for c in m.group(0))
+    def _trocar(m: re.Match) -> str:
+        return "".join(OCR_PARA_DIGITO.get(c, c) for c in m.group())
 
-    return _TOKEN_NUMERICO.sub(_troca, texto)
+    # A estrutura completa permite corrigir segmentos CNJ compostos apenas por
+    # letras OCR (``.OO.OOOO``) sem transformar prefixos como ``TST-123``.
+    texto = _CNJ_COM_OCR.sub(_trocar, texto)
+    anterior = None
+    while anterior != texto:
+        anterior = texto
+        texto = _LETRA_ADJACENTE_A_DIGITO.sub(_trocar, texto)
+    return texto
 
 
 def agrupar_milhares(digitos: str) -> str:
@@ -197,6 +241,69 @@ def agrupar_milhares(digitos: str) -> str:
     return ".".join(partes)
 
 
+def _buscar_cnj_isolado(texto: str) -> re.Match | None:
+    """Encontra CNJ sem aceitar componentes numéricos separados por sinais."""
+    for achado in CNJ.finditer(texto):
+        esquerda = texto[:achado.start()]
+        direita = texto[achado.end():]
+        embutido_a_esquerda = re.search(
+            rf"\d(?:\s*{_SEPARADOR_NUMERICO}\s*)+$", esquerda
+        )
+        embutido_a_direita = re.match(
+            rf"^(?:\s*{_SEPARADOR_NUMERICO}\s*)+\d", direita
+        )
+        if not embutido_a_esquerda and not embutido_a_direita:
+            return achado
+    return None
+
+
+def _componentes_cnj_exato(numero: str) -> tuple[str, str] | None:
+    """Lê um CNJ isolado sem aceitar sobras numéricas ou textuais.
+
+    O retorno é ``(sequencial, fim)``; ``fim`` contém os 13 dígitos depois do
+    hífen. Aceita tanto a grafia CNJ quanto a chave interna do índice e corrige
+    ruído OCR reversível antes da validação.
+    """
+    limpo = re.sub(r"\s+", "", corrigir_ocr_em_numeros(numero))
+    m = CNJ.fullmatch(limpo)
+    if m:
+        fim = "".join(
+            m.group(campo) for campo in ("dv", "ano", "segmento", "tribunal", "origem")
+        )
+        return m.group("sequencial"), fim
+
+    m = _CHAVE_CNJ.fullmatch(limpo)
+    if m:
+        return m.group("sequencial"), m.group("fim")
+    return None
+
+
+def chave_cnj(numero: str) -> str | None:
+    """Converte um CNJ isolado para a chave exata usada no índice.
+
+    Retorna ``None`` se houver mais de sete dígitos no sequencial, dígito
+    adjacente, estrutura incompleta ou qualquer conteúdo além do número.
+    """
+    componentes = _componentes_cnj_exato(numero)
+    if componentes is None:
+        return None
+    sequencial, fim = componentes
+    return f"{sequencial.zfill(7)}-{fim}"
+
+
+def formatar_cnj_para_fts(numero: str) -> str | None:
+    """Formata uma chave CNJ isolada para uma consulta exata no FTS.
+
+    A função é deliberadamente estrita para que o fallback receba somente o
+    identificador já selecionado, nunca outro número incidental do span.
+    """
+    chave = chave_cnj(numero)
+    if chave is None:
+        return None
+    sequencial, fim = chave.split("-", 1)
+    return f"{sequencial}-{fim[:2]}.{fim[2:6]}.{fim[6]}.{fim[7:9]}.{fim[9:]}"
+
+
 def variantes_numero(trecho: str) -> list[str]:
     """Formas do identificador que vale tentar no índice FTS, em ordem de aposta.
 
@@ -206,14 +313,41 @@ def variantes_numero(trecho: str) -> list[str]:
     limpo = corrigir_ocr_em_numeros(trecho)
     sem_espaco = re.sub(r"\s+", "", limpo)
 
-    m = CNJ.search(sem_espaco)
+    # Permite que o resolvedor receba diretamente a chave já selecionada por
+    # ``normalizar_citacao``. Essa é a entrada segura para o fallback FTS.
+    forma_fts = formatar_cnj_para_fts(sem_espaco)
+    if forma_fts is not None:
+        m_exato = CNJ.fullmatch(sem_espaco)
+        if m_exato and len(m_exato.group("sequencial")) < 7:
+            return [m_exato.group(0), forma_fts]
+        # A normalização interna completa o sequencial com zeros. Preserve
+        # também a grafia curta usada nos cabeçalhos de TST/TSE quando o
+        # fallback recebe apenas essa chave canônica.
+        m_chave = _CHAVE_CNJ.fullmatch(sem_espaco)
+        if m_chave:
+            sequencial_curto = m_chave.group("sequencial").lstrip("0") or "0"
+            if len(sequencial_curto) < 7:
+                fim = m_chave.group("fim")
+                forma_curta = (
+                    f"{sequencial_curto}-{fim[:2]}.{fim[2:6]}."
+                    f"{fim[6]}.{fim[7:9]}.{fim[9:]}"
+                )
+                return [forma_fts, forma_curta]
+        return [forma_fts]
+
+    m = _buscar_cnj_isolado(sem_espaco)
     if m:
         achado = m.group(0)
         formas = [achado]
-        sequencial, resto = achado.split("-", 1)
+        sequencial = m.group("sequencial")
         if len(sequencial) < 7:
-            formas.append(sequencial.zfill(7) + "-" + resto)
+            formas.append(formatar_cnj_para_fts(achado))
         return formas
+
+    # Um CNJ reconhecivelmente iniciado, porém inválido, não pode cair para a
+    # heurística de número livre: isso recriaria uma correspondência parcial.
+    if _CANDIDATO_CNJ.search(sem_espaco):
+        return []
 
     m = NUMERO_LIVRE.search(re.sub(r"\s+", " ", limpo))
     if not m:

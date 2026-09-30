@@ -12,19 +12,33 @@ from steps.rotear_citacao import ROTA_ACORDAO
 # CNJ: NNNNNNN-DD.AAAA.J.TR.OOOO — os 13 dígitos finais têm estrutura fixa,
 # o sequencial às vezes vem sem os zeros à esquerda (TST/TSE).
 DIGITOS_CNJ_MIN = carregar_config("pipeline")["digitos_cnj_min"]
+DIGITOS_CNJ_MAX = 20  # sete dígitos sequenciais + 13 dígitos estruturados
 
 
 def canonizar_bloco(digitos: str) -> str:
-    if len(digitos) >= DIGITOS_CNJ_MIN:
+    if DIGITOS_CNJ_MIN <= len(digitos) <= DIGITOS_CNJ_MAX:
         seq, fim = digitos[:-13], digitos[-13:]
         return f"{seq}-{fim[:2]}.{fim[2:6]}.{fim[6]}.{fim[7:9]}.{fim[9:]}"
     return u.agrupar_milhares(digitos)
 
 
+def _canonizar_match(m: re.Match) -> str:
+    bruto = m.group(0)
+    digitos = re.sub(r"\D", "", bruto)
+    if len(digitos) >= DIGITOS_CNJ_MIN and re.search(r"[-–]", bruto):
+        sequencial, fim = re.split(r"[-–]", bruto, maxsplit=1)
+        digitos_sequencial = re.sub(r"\D", "", sequencial)
+        digitos_fim = re.sub(r"\D", "", fim)
+        if not (1 <= len(digitos_sequencial) <= 7 and len(digitos_fim) == 13):
+            # Preserva o candidato inválido para que a validação estrita o
+            # rejeite inteiro; reagrupá-lo esconderia a estrutura CNJ.
+            return bruto
+    return canonizar_bloco(digitos)
+
+
 def normalizar_trecho(trecho: str) -> str:
     """Trecho com cada bloco numérico reescrito na forma canônica do índice."""
-    return BLOCO_NUMERICO.sub(
-        lambda m: canonizar_bloco(re.sub(r"\D", "", m.group(0))), corrigir_ocr(trecho))
+    return BLOCO_NUMERICO.sub(_canonizar_match, corrigir_ocr(trecho))
 
 
 def normalizar(trecho: str, rota: str) -> str:

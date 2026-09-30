@@ -19,6 +19,7 @@ class CitacaoNormalizada:
     trecho: str
     normalizado: str
     tribunal: str | None = None
+    qualificador_invalido: str | None = None
     classe: str | None = None
     numero: str | None = None
     uf: str | None = None
@@ -26,6 +27,11 @@ class CitacaoNormalizada:
     ano: str | None = None
     artigo: str | None = None
     diploma: str | None = None
+    numero_lei: str | None = None
+    ano_lei: str | None = None
+    identidade_legal_valida: bool | None = None
+    lei_nomeada: bool = False
+    contexto_legal_forte: bool = False
     vinculante: bool = False
     lei_numerada: bool = False
     identificador_suficiente: bool = False

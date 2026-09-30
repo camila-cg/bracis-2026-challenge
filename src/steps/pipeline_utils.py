@@ -7,7 +7,6 @@ import re
 from pathlib import Path
 
 import eda_utils as u
-from configuracao import carregar_config
 
 RAIZ = Path(__file__).resolve().parents[2]
 DADOS = RAIZ / "data"
@@ -24,11 +23,6 @@ def carregar_modulo(caminho: Path, nome: str):
 # incompleta descritiva vira busca pelo número "2.023".
 ANO_SOLTO = re.compile(r"\b(?:de|em)\s+(?:19|20)\d{2}\b", re.I)
 
-# Letra no lugar de dígito, só quando colada a um dígito ("21737l8", "6G.838",
-# "170076O"). Exigir o dígito vizinho é o que impede o "S" de "- SP" de virar 5.
-OCR_LETRA = re.escape("".join(letra for letra in carregar_config("regras_ocr")["letra_para_digito"] if letra != "|"))
-LETRA_EM_NUMERO = re.compile(rf"(?<=\d)[{OCR_LETRA}]|(?<=\d\.)[{OCR_LETRA}]|[{OCR_LETRA}](?=\d)")
-
 # Bloco numérico: dígitos separados por qualquer mistura de ponto, espaço,
 # quebra de linha e hífen ("33.-\n474", "1.741. 784", "7220273--\n23.2018...").
 # Um ano após hífen separado por espaços ("1.741.784 - 2024") é outro
@@ -40,13 +34,8 @@ BLOCO_NUMERICO = re.compile(
 
 
 def corrigir_ocr(trecho: str) -> str:
-    # Repete até estabilizar: em "1OO" o segundo O só fica colado a um dígito
-    # depois que o primeiro vira 0.
-    anterior = None
-    while anterior != trecho:
-        anterior = trecho
-        trecho = LETRA_EM_NUMERO.sub(lambda m: u.OCR_PARA_DIGITO[m.group(0)], trecho)
-    return trecho
+    """Aplica a correção OCR numérica sem atravessar palavras ou siglas."""
+    return u.corrigir_ocr_em_numeros(trecho)
 
 
 def tem_identificador(trecho: str) -> bool:

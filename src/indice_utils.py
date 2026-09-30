@@ -126,11 +126,9 @@ def normalizar_numero(bruto: str) -> str:
     (TST/TSE às vezes escrevem sem os 7 dígitos oficiais). Fora do CNJ, um
     dígito nunca vira outro dígito, então reduzir a dígitos crus já basta.
     """
-    m = u.CNJ.search(bruto)
-    if m:
-        achado = m.group(0)
-        sequencial, resto = achado.split("-", 1)
-        return sequencial.zfill(7) + "-" + re.sub(r"[^0-9]", "", resto)
+    cnj = u.chave_cnj(bruto)
+    if cnj is not None:
+        return cnj
     return re.sub(r"[^0-9]", "", bruto)
 
 

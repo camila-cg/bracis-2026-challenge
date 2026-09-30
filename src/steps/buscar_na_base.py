@@ -28,6 +28,16 @@ class Resolvedor:
     def resolver_citacao(self, citacao: CitacaoNormalizada) -> ResultadoResolucao:
         """Decide a classificação a partir dos atributos extraídos."""
         if citacao.familia == ROTA_LEI:
+            if citacao.identidade_legal_valida is False:
+                return ResultadoResolucao(
+                    "inventada", None, "lei_inventada", cobertura="fora_base",
+                    motivo="lei_numerada_sem_mapeamento",
+                )
+            if not citacao.diploma and citacao.lei_nomeada and citacao.contexto_legal_forte:
+                return ResultadoResolucao(
+                    "inventada", None, "lei_inventada", cobertura="fora_base",
+                    motivo="diploma_nomeado_sem_mapeamento",
+                )
             if not citacao.artigo:
                 return ResultadoResolucao("incompleta", None, "lei_sem_artigo", cobertura="nao_consultada", motivo="artigo_ausente")
             if not citacao.diploma:
@@ -38,7 +48,19 @@ class Resolvedor:
             alvo = self.normativos.get(f"lei|{citacao.diploma}|{citacao.artigo}")
             return self._resultado_normativo(alvo, "lei")
 
+        if citacao.qualificador_invalido and citacao.numero:
+            caminho = {
+                ROTA_SUMULA: "sumula_inventada",
+                ROTA_TEMA: "tema",
+            }.get(citacao.familia, "acordao_zero")
+            return ResultadoResolucao(
+                "inventada", None, caminho, cobertura="fora_base",
+                motivo="qualificador_invalido",
+            )
+
         if citacao.familia == ROTA_SUMULA:
+            if citacao.numero and not citacao.numero.strip("0"):
+                return ResultadoResolucao("inventada", None, "sumula_inventada", motivo="numero_zero")
             if not citacao.numero:
                 return ResultadoResolucao("incompleta", None, "sumula_sem_numero", cobertura="nao_consultada", motivo="numero_ausente")
             tribunal = "STF" if citacao.vinculante else citacao.tribunal
@@ -49,6 +71,8 @@ class Resolvedor:
             return self._resultado_normativo(alvo, "sumula")
 
         if citacao.familia == ROTA_TEMA:
+            if citacao.numero and not citacao.numero.strip("0"):
+                return ResultadoResolucao("inventada", None, "tema", cobertura="fora_base", motivo="numero_zero")
             if not citacao.numero or not citacao.identificador_suficiente:
                 return ResultadoResolucao("incompleta", None, "tema", cobertura="nao_consultada", motivo="numero_ausente")
             return ResultadoResolucao("inventada", None, "tema", cobertura="fora_base", motivo="tema_nao_indexado")
@@ -59,7 +83,9 @@ class Resolvedor:
         candidatos = self._buscar_acordaos(citacao)
         caminho = "acordao_indice"
         if not candidatos:
-            candidatos = set(u.resolver_por_numero(citacao.normalizado, con=self.con))
+            # O fallback recebe somente a identidade já selecionada. Consultar o
+            # span inteiro poderia resolver por um ano ou outro número incidental.
+            candidatos = set(u.resolver_por_numero(citacao.numero, con=self.con))
             candidatos = self._filtrar_ids(citacao, candidatos)
             caminho = "acordao_fts"
         if len(candidatos) == 1:

@@ -9,15 +9,31 @@
   "termos_relatoria": ["rel", "relator", "relatora", "relatoria", "min", "ministro", "ministra"],
   "composicao_nome": ["da", "das", "de", "do", "dos", "e"],
   "apelidos_estatuto": {
-    "Constituição": ["constitui", "cf/88", "carta magna", "cf/1988"],
-    "CLT": ["clt", "consolidação das leis do trabalho", "consolidacao das leis do trabalho", "5.452"],
-    "Código de Processo Civil": ["cpc", "processo civil", "13.105"],
-    "Código de Processo Penal": ["cpp", "processo penal", "3.689"],
-    "Código Penal Militar": ["cpm", "penal militar", "1.001"],
-    "Código Civil": ["código civil", "codigo civil", "10.406"],
-    "Código de Defesa do Consumidor": ["cdc", "defesa do consumidor", "8.078"],
-    "Código Eleitoral": ["código eleitoral", "codigo eleitoral", "4.737"],
-    "Lei Complementar nº 64/1990": ["complementar nº 64", "complementar n. 64", "complementar 64", "lc 64", "lc nº 64", "64/1990", "64/90"]
+    "Constituição": [
+      "constituição", "constituicao", "constituição federal", "constituicao federal",
+      "constituição da república", "constituicao da republica", "cf/88", "carta magna", "cf/1988"
+    ],
+    "CLT": ["clt", "consolidação das leis do trabalho", "consolidacao das leis do trabalho"],
+    "Código de Processo Civil": ["cpc", "código de processo civil", "codigo de processo civil", "processo civil"],
+    "Código de Processo Penal": ["cpp", "código de processo penal", "codigo de processo penal", "processo penal"],
+    "Código Penal Militar": [
+      "cpm", "código penal militar", "codigo penal militar", "código de processo penal militar",
+      "codigo de processo penal militar", "processo penal militar", "penal militar"
+    ],
+    "Código Civil": ["código civil", "codigo civil"],
+    "Código de Defesa do Consumidor": ["cdc", "código de defesa do consumidor", "codigo de defesa do consumidor", "defesa do consumidor"],
+    "Código Eleitoral": ["código eleitoral", "codigo eleitoral"],
+    "Lei Complementar nº 64/1990": []
+  },
+  "identidade_numerada_estatuto": {
+    "5452/1943": "CLT",
+    "13105/2015": "Código de Processo Civil",
+    "3689/1941": "Código de Processo Penal",
+    "1001/1969": "Código Penal Militar",
+    "10406/2002": "Código Civil",
+    "8078/1990": "Código de Defesa do Consumidor",
+    "4737/1965": "Código Eleitoral",
+    "64/1990": "Lei Complementar nº 64/1990"
   },
   "estatuto_por_id": {
     "10577194": "Código Eleitoral", "10590194": "Código Penal Militar",

@@ -85,7 +85,18 @@ def processar_documento(
     citacoes = []
     for candidato in candidatos:
         rota = rotear(candidato)                                       # 3
-        citacao = normalizar_citacao(candidato, rota)                   # 4
+        # O detector mantém o span enxuto para a métrica, mas um qualificador
+        # contraditório pode estar imediatamente fora dele (``do TJSP``). A
+        # normalização recebe apenas pequenas janelas de contexto; os offsets e
+        # o trecho devolvidos continuam sendo os do candidato original.
+        candidato_normalizacao = dict(candidato)
+        candidato_normalizacao["_contexto_esquerda"] = texto[
+            max(0, candidato["inicio"] - 48):candidato["inicio"]
+        ]
+        candidato_normalizacao["_contexto_direita"] = texto[
+            candidato["fim"]:min(len(texto), candidato["fim"] + 48)
+        ]
+        citacao = normalizar_citacao(candidato_normalizacao, rota)      # 4
         resultado = resolvedor.resolver_citacao(citacao)               # 5
         confianca = atribuir_confianca(resultado.caminho, citacao.fonte)  # 6
         saida = {
