@@ -591,6 +591,49 @@ def limite_entre_citacoes(texto_original, registro_anterior, registro_atual):
         return outro_marcador_jurisprudencia and fim_citacao_anterior
     return False
 
+
+_REGISTROS_NUMERICOS = {
+    "numero_processual", "numero_legal", "ano", "data",
+    "data_julgamento", "data_publicacao",
+}
+_FIM_DE_FRASE_APOS_REGISTRO = re.compile(
+    r'^\s*[)\]}\"\'\u2019\u201d\u00bb]*\.\s+(?=[A-ZÀ-ÖØ-Þ])'
+)
+
+
+def numero_comeca_nova_frase(
+    texto_original, grupo_atual, registro_anterior, registro_atual
+):
+    """Não anexa um número de outra frase a uma citação já identificada.
+
+    A restrição só é ativada depois de marcador/classe + número e quando a frase
+    seguinte começa por palavra em maiúscula. Assim, pontos de abreviações antes
+    do identificador (``art. 5º``, ``n. 27``), evidências posteriores
+    (``rel. Min.``) e números OCR quebrados em linha (``8O4.\n55O``) permanecem.
+    """
+    tem_inicio_juridico = any(
+        item["tipo_registro"] in {"marcador_principal", "classe_processual"}
+        for item in grupo_atual
+    )
+    tem_identificador = any(
+        item["tipo_registro"] in {"numero_processual", "numero_legal"}
+        for item in grupo_atual
+    )
+    anterior_encerra_identificador = registro_anterior["tipo_registro"] in (
+        _REGISTROS_NUMERICOS | {"uf", "tribunal"}
+    )
+    atual_e_numerico = registro_atual["tipo_registro"] in _REGISTROS_NUMERICOS
+    separador = texto_original[
+        registro_anterior["fim"]:registro_atual["inicio"]
+    ]
+    return (
+        tem_inicio_juridico
+        and tem_identificador
+        and anterior_encerra_identificador
+        and atual_e_numerico
+        and _FIM_DE_FRASE_APOS_REGISTRO.match(separador) is not None
+    )
+
 #revisada, mas talvez tenhamos que mexer em algumas heurísticas futuramente
 def agrupar_registros(texto_original, registros):
     grupos = []
@@ -642,8 +685,12 @@ def agrupar_registros(texto_original, registros):
             #heurística para quando tem mais de uma citação na mesma frase/parágrafo. Parece boa
             novo_marcador_distante = (distancia_marcadores > _PIPELINE["distancia_marcadores_jurisprudencia"] and registro.get("categoria") == "jurisprudencia")
 
+        numero_em_nova_frase = numero_comeca_nova_frase(
+            texto_original, grupo_atual, anterior, registro
+        )
+
         #outra heurística que talvez precise ser ajustada para generalização
-        if (distancia <= _PIPELINE["distancia_maxima_grupo"] and tamanho_grupo <= _PIPELINE["tamanho_maximo_grupo"] and not novo_marcador_distante and not novo_marcador_categoria_diferente and not nova_sv_apos_citacao_numerada and not limite_entre_citacoes(texto_original, anterior, registro)):
+        if (distancia <= _PIPELINE["distancia_maxima_grupo"] and tamanho_grupo <= _PIPELINE["tamanho_maximo_grupo"] and not novo_marcador_distante and not novo_marcador_categoria_diferente and not nova_sv_apos_citacao_numerada and not numero_em_nova_frase and not limite_entre_citacoes(texto_original, anterior, registro)):
             grupo_atual.append(registro)
         else:
             grupos.append(grupo_atual)
