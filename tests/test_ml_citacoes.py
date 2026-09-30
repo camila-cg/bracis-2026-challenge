@@ -23,7 +23,13 @@ from ml_citacoes.fusao import fusionar
 from ml_citacoes.metricas import avaliar_spans
 from ml_citacoes.selecionar_modelo import selecionar
 from ml_citacoes.splits import criar_folds, preparar, validar_origem_original, validar_sem_vazamento
-from ml_citacoes.treinar import _amostrar_tokens_o, _equilibrar_janelas, _metricas_tokens, _pesos_classes
+from ml_citacoes.treinar import (
+    _amostrar_tokens_o,
+    _argumentos_checkpointing,
+    _equilibrar_janelas,
+    _metricas_tokens,
+    _pesos_classes,
+)
 
 
 class AlinhamentoBIO(unittest.TestCase):
@@ -352,6 +358,19 @@ class Selecao(unittest.TestCase):
 
 
 class BalanceamentoTreino(unittest.TestCase):
+    def test_gradient_checkpointing_e_explicito_e_nao_reentrante(self):
+        self.assertEqual(
+            _argumentos_checkpointing({"gradient_checkpointing": True}),
+            {
+                "gradient_checkpointing": True,
+                "gradient_checkpointing_kwargs": {"use_reentrant": False},
+            },
+        )
+        self.assertEqual(
+            _argumentos_checkpointing({}),
+            {"gradient_checkpointing": False},
+        )
+
     def test_limita_janelas_negativas_e_preserva_positivas(self):
         positivas = [{"labels": [-100, 0, 1, 2]} for _ in range(2)]
         negativas = [{"labels": [-100, 0, 0]} for _ in range(10)]

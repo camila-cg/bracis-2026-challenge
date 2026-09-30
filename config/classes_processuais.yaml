@@ -14,6 +14,12 @@
 
   "siglas": ["re", "resp", "aresp", "respe", "rhc", "hc", "rse", "apl", "rms", "rr", "arr", "ar", "rp", "agarr", "rcl", "recl", "agr", "agrg", "agint", "ed", "edcl", "eds"],
   "siglas_classes_ambiguas": {
+    "ai": {
+      "classe": "agravodeinstrumento",
+      "pontos": 3,
+      "tokens_anteriores_bloqueados": ["de", "em"],
+      "aceita_numero_processual_sem_contexto": true
+    },
     "ms": {
       "classe": "mandadodeseguranca",
       "tokens_anteriores_bloqueados": ["de", "em"]
