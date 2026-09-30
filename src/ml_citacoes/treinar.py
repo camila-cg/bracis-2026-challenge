@@ -7,6 +7,7 @@ import hashlib
 import json
 import math
 import random
+import time
 from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
@@ -165,6 +166,17 @@ def _metricas_tokens(eval_pred) -> dict[str, float]:
     }
 
 
+def _argumentos_checkpointing(config: dict) -> dict:
+    """Configura recomputação de ativações sem depender de torch nos testes."""
+    ativo = bool(config.get("gradient_checkpointing", False))
+    argumentos = {"gradient_checkpointing": ativo}
+    if ativo:
+        # O modo não reentrante funciona quando o backbone está congelado pelo
+        # LoRA e evita exigir gradiente nos embeddings de entrada.
+        argumentos["gradient_checkpointing_kwargs"] = {"use_reentrant": False}
+    return argumentos
+
+
 def _ler_jsonl(caminho: Path) -> list[dict]:
     with caminho.open(encoding="utf-8") as arquivo:
         return [json.loads(linha) for linha in arquivo if linha.strip()]
@@ -305,7 +317,7 @@ def treinar(args) -> None:
         output_dir=str(args.saida / "checkpoints"),
         learning_rate=float(config.get("learning_rate", 2e-4)),
         per_device_train_batch_size=int(config.get("batch_size", 8)),
-        per_device_eval_batch_size=int(config.get("batch_size", 8)),
+        per_device_eval_batch_size=int(config.get("eval_batch_size", config.get("batch_size", 8))),
         gradient_accumulation_steps=int(config.get("gradient_accumulation", 2)),
         num_train_epochs=float(config.get("epochs", 8)),
         weight_decay=float(config.get("weight_decay", 0.01)),
@@ -318,6 +330,7 @@ def treinar(args) -> None:
         data_seed=seed,
         report_to=[],
         save_total_limit=2,
+        **_argumentos_checkpointing(config),
     )
     class TrainerPonderado(deps["Trainer"]):
         def __init__(self, *trainer_args, pesos, **trainer_kwargs):
@@ -345,7 +358,19 @@ def treinar(args) -> None:
         compute_metrics=_metricas_tokens if validacao else None,
         pesos=pesos_classes,
     )
+    if torch.cuda.is_available():
+        torch.cuda.reset_peak_memory_stats()
+    inicio_treino = time.perf_counter()
     treinador.train()
+    duracao_treino = time.perf_counter() - inicio_treino
+    pico_alocado_mib = (
+        torch.cuda.max_memory_allocated() / (1024 ** 2)
+        if torch.cuda.is_available() else None
+    )
+    pico_reservado_mib = (
+        torch.cuda.max_memory_reserved() / (1024 ** 2)
+        if torch.cuda.is_available() else None
+    )
     modelo.save_pretrained(args.saida / "adaptador")
     tokenizer.save_pretrained(args.saida / "tokenizer")
     manifesto = {
@@ -366,6 +391,17 @@ def treinar(args) -> None:
         "temperatura": 1.0,
         "calibracao": "nenhuma",
         "metrica_selecao_checkpoint": metrica_checkpoint,
+        "recursos_treino": {
+            "batch_size": int(config.get("batch_size", 8)),
+            "eval_batch_size": int(config.get("eval_batch_size", config.get("batch_size", 8))),
+            "gradient_accumulation": int(config.get("gradient_accumulation", 2)),
+            "batch_efetivo": int(config.get("batch_size", 8)) * int(config.get("gradient_accumulation", 2)),
+            "gradient_checkpointing": bool(config.get("gradient_checkpointing", False)),
+            "precisao": "fp32",
+            "duracao_segundos": duracao_treino,
+            "pico_vram_alocada_mib": pico_alocado_mib,
+            "pico_vram_reservada_mib": pico_reservado_mib,
+        },
         "aumentos_ocr": transformacoes,
         "balanceamento": {
             **amostragem,
