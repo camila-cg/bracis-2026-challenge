@@ -137,6 +137,43 @@ class TiposDeCitacao(unittest.TestCase):
         encontrados = candidatos(texto)
         self.assertEqual([item["trecho"] for item in encontrados], [texto])
 
+    def test_ai_exata_com_identificador_e_classe_processual(self):
+        for texto in (
+            "AI nº 1024567-34.2023.8.26.0000/TJSP",
+            "AI 123456/MG",
+            "ai 123456",
+        ):
+            with self.subTest(texto=texto):
+                tokens = detector.criar_tokens(texto)
+                registros = detector.detectar_marcadores_e_indicios(texto, tokens)
+
+                self.assertFalse(any(
+                    registro["tipo_registro"] == "marcador_principal"
+                    and registro.get("marcador") == "ai"
+                    for registro in registros
+                ))
+                self.assertTrue(any(
+                    registro["tipo_registro"] == "classe_processual"
+                    and registro.get("classe") == "agravodeinstrumento"
+                    for registro in registros
+                ))
+                self.assertEqual(
+                    [(item["tipo"], item["trecho"]) for item in candidatos(texto)],
+                    [("jurisprudencia", texto)],
+                )
+
+    def test_ai_ambigua_sem_identificador_nao_vira_citacao(self):
+        for texto in (
+            "AI",
+            "AI foi utilizada no processo.",
+            "AI 2024",
+            "AI nº 37",
+            "Aí 123456 começou a discussão.",
+            "O sistema de AI 123456 foi atualizado.",
+        ):
+            with self.subTest(texto=texto):
+                self.assertEqual(candidatos(texto), [])
+
     def test_ms_geografico_nao_vira_citacao(self):
         for texto in (
             "Investimentos no MS 2024 cresceram.",

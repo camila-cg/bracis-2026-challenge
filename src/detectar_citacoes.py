@@ -238,11 +238,28 @@ def procurar_classes_processuais_ambiguas(tokens):
         if regra is None or not tem_numero_logo_depois(indice, tokens):
             continue
 
+        # A normalização remove acentos; sem esta guarda, "aí 123456" seria
+        # indistinguível da classe processual "AI 123456".
+        if verifica_acento(token["original"]):
+            continue
+
         token_anterior = ( tokens[indice - 1]["normalizado"] if indice > 0 else None)
         if token_anterior in regra.get("tokens_anteriores_bloqueados", []):
             continue
 
-        classes.append(criar_registro("classe_processual", indice, indice, tokens, regra.get("pontos", 1),valor=sigla,classe=regra["classe"],categoria="jurisprudencia",))
+        classes.append(criar_registro(
+            "classe_processual",
+            indice,
+            indice,
+            tokens,
+            regra.get("pontos", 1),
+            valor=sigla,
+            classe=regra["classe"],
+            categoria="jurisprudencia",
+            aceita_numero_processual_sem_contexto=regra.get(
+                "aceita_numero_processual_sem_contexto", False
+            ),
+        ))
 
     return classes
 
@@ -606,6 +623,15 @@ def parece_jurisprudencia_sem_marcador(grupo):
     tem_data = bool(tipos & {"data_julgamento","data_publicacao",})
     tem_classe_processual = "classe_processual" in tipos
 
+    # Algumas siglas exatas, embora ambíguas isoladamente, identificam a
+    # fonte quando acompanhadas de um número com formato processual. A opção
+    # é declarada por classe para não afrouxar MS e RO globalmente.
+    tem_classe_autossuficiente = any(
+        registro["tipo_registro"] == "classe_processual"
+        and registro.get("aceita_numero_processual_sem_contexto", False)
+        for registro in grupo
+    )
+
     citacao_numerada_completa = (tem_numero and tem_uf and tem_tribunal)
 
     citacao_numerada_contextual = (tem_numero and (tem_tribunal or tem_uf) and (tem_relatoria or tem_orgao or tem_data))
@@ -614,7 +640,17 @@ def parece_jurisprudencia_sem_marcador(grupo):
 
     citacao_com_classe_processual = (tem_classe_processual and tem_numero and (tem_tribunal or tem_uf or tem_relatoria or tem_orgao or tem_data))
 
-    return (citacao_numerada_completa or citacao_numerada_contextual or citacao_descritiva or citacao_com_classe_processual)
+    citacao_com_classe_e_identificador = (
+        tem_classe_autossuficiente and tem_numero
+    )
+
+    return (
+        citacao_numerada_completa
+        or citacao_numerada_contextual
+        or citacao_descritiva
+        or citacao_com_classe_processual
+        or citacao_com_classe_e_identificador
+    )
 
 
 #define a categoria dos registros - ok
