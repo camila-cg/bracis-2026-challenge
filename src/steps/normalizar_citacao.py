@@ -400,6 +400,7 @@ def normalizar_citacao(candidato: dict, familia: Familia, *, ja_normalizado: boo
         identidade_legal_valida = None
         lei_numerada = lei_nomeada = contexto_legal_forte = False
     numero = None
+    identificador_adulterado = False
     if familia == "sumula":
         numero = _numero_apos(trecho, E_SUMULA)
     elif familia == "tema":
@@ -412,6 +413,10 @@ def normalizar_citacao(candidato: dict, familia: Familia, *, ja_normalizado: boo
             else normalizar(trecho_para_numero, familia)
         )
         numero = _numero_acordao(texto_para_numero)
+        # Sem número selecionado e com estrutura de CNJ no trecho: o CNJ foi
+        # rejeitado por dígito a mais, sufixo ou prefixo. É adulteração, não
+        # ausência de identificador.
+        identificador_adulterado = numero is None and u.cnj_adulterado(texto_para_numero)
     return CitacaoNormalizada(
         familia=familia,
         inicio=candidato["inicio"],
@@ -434,5 +439,6 @@ def normalizar_citacao(candidato: dict, familia: Familia, *, ja_normalizado: boo
         vinculante=bool(_VINCULANTE.search(trecho)) if familia == "sumula" else False,
         lei_numerada=lei_numerada,
         identificador_suficiente=tem_identificador(trecho),
+        identificador_adulterado=identificador_adulterado,
         fonte=candidato.get("fonte", "regra"),
     )

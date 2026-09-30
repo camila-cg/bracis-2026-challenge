@@ -35,6 +35,7 @@ class CitacaoNormalizada:
     vinculante: bool = False
     lei_numerada: bool = False
     identificador_suficiente: bool = False
+    identificador_adulterado: bool = False
     fonte: Fonte = "regra"
 
 

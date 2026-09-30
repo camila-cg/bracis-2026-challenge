@@ -77,6 +77,12 @@ class Resolvedor:
                 return ResultadoResolucao("incompleta", None, "tema", cobertura="nao_consultada", motivo="numero_ausente")
             return ResultadoResolucao("inventada", None, "tema", cobertura="fora_base", motivo="tema_nao_indexado")
 
+        if citacao.identificador_adulterado:
+            return ResultadoResolucao(
+                "inventada", None, "acordao_zero", cobertura="fora_base",
+                motivo="cnj_malformado",
+            )
+
         if citacao.familia == ROTA_DESCRITIVA or not citacao.numero:
             return ResultadoResolucao("incompleta", None, "descritiva", cobertura="nao_consultada", motivo="numero_ausente")
 

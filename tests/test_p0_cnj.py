@@ -10,8 +10,11 @@ sys.path.insert(0, str(RAIZ / "src"))
 
 import eda_utils as u
 import indice_utils as ind
+from pipeline import processar_documento
 from steps.buscar_na_base import Resolvedor
+from steps.normalizar_citacao import normalizar_citacao
 from steps.normalizar_numeros import normalizar_trecho
+from steps.rotear_citacao import ROTA_ACORDAO
 
 
 CNJ_REAL = "7000136-79.2023.7.00.0000"
@@ -88,6 +91,31 @@ class NormalizacaoEstritaCnj(unittest.TestCase):
         self.assertIsNone(u.CNJ.search(normalizado))
         self.assertEqual(u.variantes_numero(normalizado), [])
 
+    def test_cnj_adulterado_e_reconhecido_pela_estrutura(self):
+        for adulterado in (
+            "97000136-79.2023.7.00.0000",
+            "70001360-79.2023.7.00.0000",
+            CNJ_REAL + ".1",
+            CNJ_REAL + "9",
+            "9." + CNJ_REAL,
+            CNJ_REAL + "/9",
+        ):
+            with self.subTest(adulterado=adulterado):
+                self.assertTrue(u.cnj_adulterado(f"APL {adulterado}/RS"))
+
+    def test_cnj_valido_ou_sem_estrutura_de_cnj_nao_e_adulterado(self):
+        for trecho in (
+            f"APL {CNJ_REAL}/RS",
+            "310-76.2016.6.16.0006",
+            "7OOO136-79.2O23.7.OO.OOOO",
+            "REsp 1.741.784/PR do STJ",
+            "REsp 1.741.784/PR, fls. 12-14.",
+            "Reclamação nº 66.516/RO",
+            "julgado do STF proferido em 2024 pela relatoria de Dias Toffoli",
+        ):
+            with self.subTest(trecho=trecho):
+                self.assertFalse(u.cnj_adulterado(trecho))
+
 
 class ResolucaoEstritaCnj(unittest.TestCase):
     @classmethod
@@ -125,6 +153,53 @@ class ResolucaoEstritaCnj(unittest.TestCase):
             self.resolvedor.acordao("APL 7000136-79.2024.7.00.0000/RS")[:2],
             ("inventada", None),
         )
+
+    def test_cnj_malformado_e_identificador_explicito_invalido_logo_inventada(self):
+        # Identificador explícito inválido não é identificador ausente: não pode
+        # cair na rota descritiva (incompleta).
+        for adulterado in (
+            "APL 97000136-79.2023.7.00.0000/RS",
+            "APL 17000136-79.2023.7.00.0000/RS",
+            "APL 70001360-79.2023.7.00.0000/RS",
+            f"APL {CNJ_REAL}.1/RS",
+            f"APL {CNJ_REAL}9/RS",
+            f"APL 9.{CNJ_REAL}/RS",
+            f"APL {CNJ_REAL}-9/RS",
+        ):
+            with self.subTest(adulterado=adulterado):
+                classe, id_canonico, caminho = self.resolvedor.acordao(adulterado)
+                self.assertEqual(classe, "inventada")
+                self.assertIsNone(id_canonico)
+                self.assertEqual(caminho, "acordao_zero")
+
+    def test_cnj_malformado_informa_o_motivo(self):
+        citacao = normalizar_citacao(
+            {"trecho": "APL 97000136-79.2023.7.00.0000/RS", "inicio": 0, "fim": 34},
+            ROTA_ACORDAO,
+            ja_normalizado=True,
+        )
+        self.assertTrue(citacao.identificador_adulterado)
+        resultado = self.resolvedor.resolver_citacao(citacao)
+        self.assertEqual(resultado.classe, "inventada")
+        self.assertEqual(resultado.motivo, "cnj_malformado")
+        self.assertEqual(resultado.cobertura, "fora_base")
+
+    def test_cnj_valido_e_numero_comum_nao_sao_marcados_como_adulterados(self):
+        for trecho in (f"APL {CNJ_REAL}/RS", "REsp 1.741.784/PR do STJ", "Reclamação nº 66.516/RO"):
+            with self.subTest(trecho=trecho):
+                citacao = normalizar_citacao(
+                    {"trecho": trecho, "inicio": 0, "fim": len(trecho)},
+                    ROTA_ACORDAO,
+                    ja_normalizado=True,
+                )
+                self.assertFalse(citacao.identificador_adulterado)
+
+    def test_documento_ponta_a_ponta_classifica_cnj_malformado_como_inventada(self):
+        texto = "Conforme a APL 97000136-79.2023.7.00.0000/RS, a parte deve recorrer."
+        citacoes = processar_documento("sintetico", texto, self.resolvedor)["citacoes"]
+        self.assertEqual(len(citacoes), 1)
+        self.assertEqual(citacoes[0]["classificacao"], "inventada")
+        self.assertEqual(citacoes[0]["caminho"], "acordao_zero")
 
 
 if __name__ == "__main__":

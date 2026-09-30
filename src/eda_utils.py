@@ -361,6 +361,26 @@ def variantes_numero(trecho: str) -> list[str]:
     return formas
 
 
+# Estrutura de um CNJ sem exigir fronteiras: serve só para reconhecer que o
+# trecho *tenta* ser um CNJ. Mais estreita que ``_CANDIDATO_CNJ`` de propósito,
+# para que um intervalo de páginas ("fls. 12-14.") não conte como CNJ.
+_ESTRUTURA_CNJ = re.compile(r"\d+-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}")
+
+
+def cnj_adulterado(trecho: str) -> bool:
+    """O trecho traz a estrutura de um CNJ, mas nenhum CNJ isolado e válido.
+
+    Lê o trecho como ``variantes_numero`` (OCR corrigido, sem espaços), então os
+    dois concordam: quando ``variantes_numero`` descarta o bloco por ter dígito
+    a mais, sufixo ou prefixo, esta função diz que foi adulteração. Um
+    identificador explícito e inválido não é identificador ausente.
+    """
+    sem_espaco = re.sub(r"\s+", "", corrigir_ocr_em_numeros(trecho))
+    if formatar_cnj_para_fts(sem_espaco) is not None or _buscar_cnj_isolado(sem_espaco):
+        return False
+    return bool(_ESTRUTURA_CNJ.search(sem_espaco))
+
+
 # Janela, por tribunal, dentro da qual o número do processo aparece no documento
 # que É aquele processo. Medida em 02_eda_base_canonica.ipynb — ver a seção
 # "Onde mora o identificador".
