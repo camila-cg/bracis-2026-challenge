@@ -60,8 +60,15 @@ _ARTIGO = re.compile(
     r"(?![A-Za-z0-9])",
     re.I,
 )
+# Qualificador de ente federativo entre a espécie e o número: "Lei municipal nº
+# 3.918/2016", "Lei Complementar estadual nº 812/2021", "Lei Mun. 2.741/19".
+_ENTE_FEDERATIVO = r"(?:municipal|mun\.?|estadual|est\.?|distrital|dist\.?|federal|fed\.?|nacional)"
+# O catálogo de diplomas só tem leis federais: uma lei estadual, municipal ou
+# distrital de mesmo número e ano não é o diploma do catálogo.
+_ENTES_NAO_FEDERAIS = {"municipal", "mun", "estadual", "est", "distrital", "dist"}
 _IDENTIDADE_LEI = re.compile(
-    r"\b(?:lei(?:\s+complementar)?|decreto\s*[-–]?\s*lei|lc)\s*"
+    r"\b(?:lei(?:\s+complementar)?|decreto\s*[-–]?\s*lei|lc)"
+    rf"(?:\s+(?P<ente>{_ENTE_FEDERATIVO})(?![A-Za-zÀ-ÿ]))?\s*"
     r"(?:n(?:[uú]mero|[.º°o](?:\s*[º°o.])?)?\s*)?"
     r"(?P<numero>\d(?:[\d.\s]*\d)?)",
     re.I,
@@ -341,10 +348,15 @@ def _ano_lei_apos(trecho: str) -> str | None:
     return anos[0] if anos else None
 
 
-def _identidades_lei(trecho: str) -> list[tuple[str, str | None]]:
+def _identidades_lei(trecho: str) -> list[tuple[str, str | None, bool]]:
+    """(número, ano, ente não federal) de cada lei numerada do trecho."""
     corrigido = corrigir_ocr(trecho)
     return [
-        (re.sub(r"\D", "", achado.group("numero")), _ano_lei_apos(corrigido[achado.end():]))
+        (
+            re.sub(r"\D", "", achado.group("numero")),
+            _ano_lei_apos(corrigido[achado.end():]),
+            (achado.group("ente") or "").lower().rstrip(".") in _ENTES_NAO_FEDERAIS,
+        )
         for achado in _IDENTIDADE_LEI.finditer(corrigido)
     ]
 
@@ -364,14 +376,17 @@ def _dados_lei(trecho: str) -> tuple[str | None, str | None, str | None, bool | 
     if not identidades:
         return diploma_nomeado, None, None, None, False
 
-    diplomas_numerados = [_diploma_por_identidade(numero, ano) for numero, ano in identidades]
+    diplomas_numerados = [
+        None if nao_federal else _diploma_por_identidade(numero, ano)
+        for numero, ano, nao_federal in identidades
+    ]
     identidade_valida = (
         all(diplomas_numerados)
         and len(set(diplomas_numerados)) == 1
         and (not diploma_nomeado or diploma_nomeado == diplomas_numerados[0])
     )
     diploma = diplomas_numerados[0] if identidade_valida else diploma_nomeado
-    numero, ano = identidades[0]
+    numero, ano, _ = identidades[0]
     return diploma, numero, ano, identidade_valida, True
 
 

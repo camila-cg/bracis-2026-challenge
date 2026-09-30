@@ -92,6 +92,68 @@ class IdentidadeLegalEstruturada(unittest.TestCase):
                 self.assertFalse(citacao.identidade_legal_valida)
                 self.assertEqual(self.resolver(trecho).classe, "inventada")
 
+    def test_lei_com_qualificador_de_ente_e_numerada_e_sem_mapeamento_logo_inventada(self):
+        # Um qualificador de ente entre `Lei` e o número não faz a citação
+        # perder o identificador: número explícito sem mapeamento é inventada.
+        casos = (
+            ("art. 41 da Lei municipal nº 3.918/2016", "3918", "2016"),
+            ("art. 18 da Lei federal nº 15.117/2025", "15117", "2025"),
+            ("Lei Complementar estadual nº 812/2021, art. 6º, § 4º", "812", "2021"),
+            ("9.3 remete ao art. 27 da Lei Nacional nº 14.927/2024", "14927", "2024"),
+            ("art. 8º da Lei distrital nº 6.789/2021", "6789", "2021"),
+        )
+        for trecho, numero, ano in casos:
+            with self.subTest(trecho=trecho):
+                citacao = normalizar(trecho)
+                self.assertTrue(citacao.lei_numerada)
+                self.assertEqual((citacao.numero_lei, citacao.ano_lei), (numero, ano))
+                self.assertFalse(citacao.identidade_legal_valida)
+                resultado = self.resolver(trecho)
+                self.assertEqual((resultado.classe, resultado.caminho), ("inventada", "lei_inventada"))
+                self.assertEqual(resultado.motivo, "lei_numerada_sem_mapeamento")
+
+    def test_qualificador_abreviado_ocr_e_ano_de_dois_digitos(self):
+        citacao = normalizar("Lei Mun. 2.74l/19, art. 8º")
+        self.assertTrue(citacao.lei_numerada)
+        self.assertEqual((citacao.numero_lei, citacao.ano_lei), ("2741", "2019"))
+        self.assertEqual(self.resolver("Lei Mun. 2.74l/19, art. 8º").classe, "inventada")
+
+    def test_qualificador_federal_ou_nacional_preserva_a_identidade_do_catalogo(self):
+        for trecho in (
+            "art. 373 da Lei federal nº 13.105/2015",
+            "art. 373 da Lei Nacional nº 13.105/2015",
+            "art. 373 da Lei Fed. 13.105/2015",
+        ):
+            with self.subTest(trecho=trecho):
+                citacao = normalizar(trecho)
+                self.assertEqual(
+                    (citacao.numero_lei, citacao.diploma, citacao.identidade_legal_valida),
+                    ("13105", "Código de Processo Civil", True),
+                )
+                resultado = self.resolver(trecho)
+                self.assertEqual((resultado.classe, resultado.id_canonico), ("real", 10))
+
+    def test_lei_estadual_ou_municipal_nao_e_a_lei_federal_do_catalogo(self):
+        # O catálogo só tem leis federais; uma lei estadual de mesmo número e
+        # ano não é o CPC.
+        for trecho in (
+            "art. 373 da Lei estadual nº 13.105/2015",
+            "art. 373 da Lei municipal nº 13.105/2015",
+            "art. 373 da Lei Mun. nº 13.105/2015",
+            "art. 373 da Lei distrital nº 13.105/2015",
+        ):
+            with self.subTest(trecho=trecho):
+                citacao = normalizar(trecho)
+                self.assertFalse(citacao.identidade_legal_valida)
+                self.assertEqual(self.resolver(trecho).classe, "inventada")
+
+    def test_qualificador_de_ente_sem_numero_nao_vira_lei_numerada(self):
+        for trecho in ("art. 5 da Lei estadual pertinente", "o artigo da Lei municipal aplicável"):
+            with self.subTest(trecho=trecho):
+                citacao = normalizar(trecho)
+                self.assertFalse(citacao.lei_numerada)
+                self.assertIsNone(citacao.numero_lei)
+
     def test_alias_mais_especifico_distingue_cpp_de_cpm(self):
         cpp = normalizar("art. 312 do Código de Processo Penal")
         cpm = normalizar("art. 290 do Código de Processo Penal Militar")
