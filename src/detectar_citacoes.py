@@ -299,6 +299,9 @@ def procurar_classes_processuais_ambiguas(tokens):
 
 
 
+_OCR_DE_LEI = {"le1", "lel"}
+
+
 def procurar_marcadores_principais(tokens):
     marcadores_principais = []
     intervalos_usados = set()
@@ -321,6 +324,12 @@ def procurar_marcadores_principais(tokens):
                 break
         if tem_hifen and tem_sigla:
             marcador_encontrado = ("jurisprudencia", token_atual, 1.0, indice)
+
+        # "lei" é curto demais para a correspondência aproximada; o OCR que troca
+        # o "i" por "1" ou "l" só vale quando um número vem logo depois.
+        if (marcador_encontrado is None and token_atual in _OCR_DE_LEI
+                and tem_numero_logo_depois(indice, tokens)):
+            marcador_encontrado = ("lei", "lei", 0.9, indice)
 
          #agora somente procura no vocabulário se não for uma sigla composta
         if marcador_encontrado is None:

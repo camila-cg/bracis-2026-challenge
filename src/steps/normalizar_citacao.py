@@ -73,6 +73,8 @@ _IDENTIDADE_LEI = re.compile(
     r"(?P<numero>\d(?:[\d.\s]*\d)?)",
     re.I,
 )
+# OCR que troca o "i" de "Lei" por "1" ou "l"; só vale com número logo depois.
+_OCR_DE_LEI = re.compile(r"(?<![\w])Le[1l](?=\s*(?:n(?:[uú]mero|[.º°o])?\s*)?\d)", re.I)
 _ANO_APOS_BARRA = re.compile(r"^\s*/\s*(\d+)")
 _ANO_APOS_DE = re.compile(r"^\s*,?\s*de\b([^.;:\n]{0,60})", re.I)
 _LEI_NOMEADA = re.compile(r"\blei\s+d(?:a|e|o|as|os)\s+[A-Za-zÀ-ÿ]", re.I)
@@ -350,7 +352,7 @@ def _ano_lei_apos(trecho: str) -> str | None:
 
 def _identidades_lei(trecho: str) -> list[tuple[str, str | None, bool]]:
     """(número, ano, ente não federal) de cada lei numerada do trecho."""
-    corrigido = corrigir_ocr(trecho)
+    corrigido = _OCR_DE_LEI.sub(lambda m: m.group()[:2] + "i", corrigir_ocr(trecho))
     return [
         (
             re.sub(r"\D", "", achado.group("numero")),
