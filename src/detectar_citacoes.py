@@ -44,6 +44,8 @@ MARCADORES_LEGAIS_NUMERADOS = set(_DIPLOMAS["marcadores_numerados"])
 SIGLAS = set(_CLASSES["siglas"])
 SIGLAS_CLASSES_AMBIGUAS = _CLASSES.get("siglas_classes_ambiguas", {})
 MARCADORES_EXATOS = set(_CLASSES.get("marcadores_exatos", []))
+IOU_MIN = 0.5
+COBERTURA_EXTRA_MIN = 0.9
 
 #para evitar que confuda com marcadores principais
 TERMOS_PRIORITARIOS_INDICIOS = (TERMOS_RELATORIA | TRIBUNAIS)
@@ -818,44 +820,87 @@ def calcular_sobreposicao(candidato, anotacao):
     uniao = (max(candidato["fim"], int(anotacao["fim"])) - min(candidato["inicio"], int(anotacao["inicio"])))
     return intersecao / uniao
 
+
+def calcular_cobertura_da_predicao(candidato, anotacao):
+    """Fração da predição coberta pelo gold, como na regra oficial EXTRA."""
+    largura = candidato["fim"] - candidato["inicio"]
+    if largura <= 0:
+        return 0
+    inicio = max(candidato["inicio"], int(anotacao["inicio"]))
+    fim = min(candidato["fim"], int(anotacao["fim"]))
+    return max(0, fim - inicio) / largura
+
 #funcao para verificar se acertou a detecção do span
 def avaliar_documento(candidatos, anotacoes):
+    # Replica o matching oficial: IoU >= 0,5 e escolha gulosa pela maior
+    # sobreposição. O formato de submissão não tem o campo ``tipo``; por isso
+    # ele não participa do casamento de spans.
+    pares_duplicados = [
+        (primeiro, segundo)
+        for primeiro in range(len(candidatos))
+        for segundo in range(primeiro + 1, len(candidatos))
+        if calcular_sobreposicao(candidatos[primeiro], candidatos[segundo])
+        >= IOU_MIN
+    ]
+    candidatos_em_duplicatas = {
+        indice for par in pares_duplicados for indice in par
+    }
+
+    pares_possiveis = []
+    for indice_anotacao, anotacao in enumerate(anotacoes):
+        for indice_candidato, candidato in enumerate(candidatos):
+            sobreposicao = calcular_sobreposicao(candidato, anotacao)
+            if sobreposicao >= IOU_MIN:
+                pares_possiveis.append(
+                    (-sobreposicao, indice_anotacao, indice_candidato)
+                )
+
+    anotacoes_usadas = set()
     candidatos_usados = set()
     correspondencias = []
+    for negativo_iou, indice_anotacao, indice_candidato in sorted(pares_possiveis):
+        if indice_anotacao in anotacoes_usadas or indice_candidato in candidatos_usados:
+            continue
+        anotacoes_usadas.add(indice_anotacao)
+        candidatos_usados.add(indice_candidato)
+        anotacao = anotacoes[indice_anotacao]
+        candidato = candidatos[indice_candidato]
+        correspondencias.append({
+            "citacao_id": anotacao["citacao_id"],
+            "indice_candidato": indice_candidato,
+            "sobreposicao": round(-negativo_iou, 3),
+            "span_exato": (
+                candidato["inicio"] == int(anotacao["inicio"])
+                and candidato["fim"] == int(anotacao["fim"])
+            ),
+        })
 
-    for anotacao in anotacoes:
-        melhor_indice = None
-        melhor_sobreposicao = 0
-
-        for indice, candidato in enumerate(candidatos):
-            if indice in candidatos_usados:
-                continue
-            if candidato["tipo"] != anotacao["tipo"]:
-                continue
-
-            sobreposicao = calcular_sobreposicao(candidato, anotacao)
-            if sobreposicao > melhor_sobreposicao:
-                melhor_indice = indice
-                melhor_sobreposicao = sobreposicao
-
-        if melhor_indice is not None and melhor_sobreposicao > 0:
-            candidatos_usados.add(melhor_indice)
-            candidato = candidatos[melhor_indice]
-            correspondencias.append({
-                "citacao_id": anotacao["citacao_id"],
-                "indice_candidato": melhor_indice,
-                "sobreposicao": round(melhor_sobreposicao, 3),
-                "span_exato": (
-                    candidato["inicio"] == int(anotacao["inicio"])
-                    and candidato["fim"] == int(anotacao["fim"])
-                ),
-            })
+    # O scorer ignora componentes extras quase contidos em um gold que já
+    # casou. Isso evita penalizar dois spans da mesma citação, sem reutilizar
+    # uma predição como verdadeiro positivo.
+    indices_extras_ignorados = {
+        indice_candidato
+        for indice_candidato, candidato in enumerate(candidatos)
+        if indice_candidato not in candidatos_usados
+        # O scorer oficial rejeita a submissão antes do matching quando duas
+        # predições têm IoU >= 0,5. No diagnóstico local, não perdoamos a
+        # duplicata como EXTRA: ela permanece FP e a invalidade fica explícita.
+        and indice_candidato not in candidatos_em_duplicatas
+        and any(
+            calcular_cobertura_da_predicao(candidato, anotacoes[indice_anotacao])
+            >= COBERTURA_EXTRA_MIN
+            for indice_anotacao in anotacoes_usadas
+        )
+    }
 
     verdadeiros_positivos = len(correspondencias)
-    falsos_positivos = len(candidatos) - verdadeiros_positivos
+    falsos_positivos = (
+        len(candidatos) - verdadeiros_positivos - len(indices_extras_ignorados)
+    )
     falsos_negativos = len(anotacoes) - verdadeiros_positivos
     precisao = (
-        verdadeiros_positivos / len(candidatos) if candidatos else 0
+        verdadeiros_positivos / (verdadeiros_positivos + falsos_positivos)
+        if verdadeiros_positivos + falsos_positivos else 0
     )
     cobertura = (
         verdadeiros_positivos / len(anotacoes) if anotacoes else 0
@@ -869,6 +914,9 @@ def avaliar_documento(candidatos, anotacoes):
         "verdadeiros_positivos": verdadeiros_positivos,
         "falsos_positivos": falsos_positivos,
         "falsos_negativos": falsos_negativos,
+        "extras_ignorados": len(indices_extras_ignorados),
+        "duplicatas_invalidas": len(pares_duplicados),
+        "submissao_valida": not pares_duplicados,
         "spans_exatos": sum(item["span_exato"] for item in correspondencias),
         "precisao": round(precisao, 4),
         "cobertura": round(cobertura, 4),
@@ -876,6 +924,7 @@ def avaliar_documento(candidatos, anotacoes):
         "indices_correspondentes": {
             item["indice_candidato"] for item in correspondencias
         },
+        "indices_extras_ignorados": indices_extras_ignorados,
     }
 
 #avalia o conjunto do goldenset
@@ -884,6 +933,8 @@ def avaliar_conjunto(candidatos_por_documento, anotacoes_por_documento, threshol
     verdadeiros_positivos = 0
     falsos_positivos = 0
     falsos_negativos = 0
+    extras_ignorados = 0
+    duplicatas_invalidas = 0
     spans_exatos = 0
 
     for documento_id, anotacoes in anotacoes_por_documento.items():
@@ -897,10 +948,13 @@ def avaliar_conjunto(candidatos_por_documento, anotacoes_por_documento, threshol
         verdadeiros_positivos += avaliacao["verdadeiros_positivos"]
         falsos_positivos += avaliacao["falsos_positivos"]
         falsos_negativos += avaliacao["falsos_negativos"]
+        extras_ignorados += avaliacao["extras_ignorados"]
+        duplicatas_invalidas += avaliacao["duplicatas_invalidas"]
         spans_exatos += avaliacao["spans_exatos"]
 
     total_esperadas = verdadeiros_positivos + falsos_negativos
-    precisao = verdadeiros_positivos / total_candidatos if total_candidatos else 0
+    total_avaliadas = verdadeiros_positivos + falsos_positivos
+    precisao = verdadeiros_positivos / total_avaliadas if total_avaliadas else 0
     cobertura = verdadeiros_positivos / total_esperadas if total_esperadas else 0
     f1 = (
         2 * precisao * cobertura / (precisao + cobertura)
@@ -913,6 +967,9 @@ def avaliar_conjunto(candidatos_por_documento, anotacoes_por_documento, threshol
         "verdadeiros_positivos": verdadeiros_positivos,
         "falsos_positivos": falsos_positivos,
         "falsos_negativos": falsos_negativos,
+        "extras_ignorados": extras_ignorados,
+        "duplicatas_invalidas": duplicatas_invalidas,
+        "submissao_valida": duplicatas_invalidas == 0,
         "spans_exatos": spans_exatos,
         "precisao": round(precisao, 4),
         "cobertura": round(cobertura, 4),
@@ -989,9 +1046,11 @@ def analisar_documentos(caminho_goldenset=goldenset, pasta_documentos=documentos
         ]
         avaliacao = avaliar_documento(candidatos, anotacoes_documento)
         indices_correspondentes = avaliacao.pop("indices_correspondentes")
+        indices_extras_ignorados = avaliacao.pop("indices_extras_ignorados")
+        indices_ignorados = indices_correspondentes | indices_extras_ignorados
         falsos_positivos = [
             candidato for indice, candidato in enumerate(candidatos)
-            if indice not in indices_correspondentes]
+            if indice not in indices_ignorados]
 
         documentos.append({
             "documento_id": documento_id,
