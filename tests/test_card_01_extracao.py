@@ -399,6 +399,33 @@ class FiltrosDeDistratores(unittest.TestCase):
         item = {"inicio": 0, "trecho": "REsp 1.741.784/PR"}
         self.assertFalse(e_distrator(item))
 
+    def test_citacao_na_mesma_linha_de_um_rotulo_qualquer_e_preservada(self):
+        # Antes, um rótulo fora de processo/autos/valor tomava a linha
+        # inteira como campo (fim = offset + len(linha)) e engolia junto
+        # qualquer citação real na mesma linha — falso negativo silencioso.
+        for texto, citacao in (
+            ("Relator: Fulano de Tal, que também citou o REsp 1.741.784/PR em voto anterior.", "REsp 1.741.784/PR"),
+            ("Ementa: agravo interno. Precedente firmado no REsp 1.741.784/PR. Recurso desprovido.", "REsp 1.741.784/PR"),
+        ):
+            with self.subTest(texto=texto):
+                inicio = texto.index(citacao)
+                item = {"inicio": inicio, "fim": inicio + len(citacao), "trecho": citacao}
+                self.assertIsNone(motivo_distrator(item, texto))
+
+    def test_campos_adjacentes_sem_citacao_continuam_fundidos_mesmo_com_numero(self):
+        # Regressão da correção acima: "Memorial nº 255/2021" tem um número
+        # que não é citação nenhuma. A truncatura desse campo não pode
+        # quebrar a fusão com os campos anteriores ("Processo"/"Assistido")
+        # e deixar esse trecho de cabeçalho sobreviver como candidato.
+        texto = (
+            "Processo nº 1292746-27.2020.7.13.1173\n"
+            "Assistido: TRANSPORTES MARAJÁ EIRELI\n"
+            "Memorial nº 255/2021\n\nMEMORIAL\n\nConforme REsp 1.741.784/PR."
+        )
+        trecho = texto[texto.index("Processo"):texto.index("255/2021") + len("255/2021")]
+        item = {"inicio": texto.index(trecho), "fim": texto.index(trecho) + len(trecho), "trecho": trecho}
+        self.assertIsNotNone(motivo_distrator(item, texto))
+
     def test_filtragem_nao_altera_offsets_dos_sobreviventes(self):
         texto = "Processo 123456\n\nACÓRDÃO\nConforme REsp 1.741.784/PR."
         falso_trecho = "Processo 123456"

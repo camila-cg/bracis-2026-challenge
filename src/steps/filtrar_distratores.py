@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 
 import indice_utils as ind
-from steps.pipeline_utils import corrigir_ocr
+from steps.pipeline_utils import BLOCO_NUMERICO, corrigir_ocr
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,6 +15,11 @@ class CampoMetadado:
     inicio: int
     fim: int
     numero: str | None = None
+    # Fim da linha física do campo, sem a truncatura de `fim` — usado só pra
+    # tolerância de campos adjacentes fundidos num candidato só (ver
+    # motivo_distrator). A truncatura em si (evitar engolir uma citação real
+    # na mesma linha do rótulo) não deve enfraquecer essa tolerância.
+    fim_linha: int = -1
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,7 +115,17 @@ def analisar_contexto(texto: str) -> ContextoDocumento:
                 valor = VALOR_DA_CAUSA.search(corrigir_ocr(linha))
                 if valor:
                     fim = offset + valor.end()
-            campos.append(CampoMetadado(rotulo, offset + m.start(), fim, numero))
+            else:
+                # Mesmo motivo do "processo"/"autos" acima: um rótulo como
+                # "Relator:" ou "Ementa:" pode vir numa linha só, com uma
+                # citação de verdade depois ("Relator: Fulano, que também
+                # citou o REsp 1.741.784/PR..."). Sem isso, o campo tomava a
+                # linha inteira (fim = offset + len(linha)) e engolia a
+                # citação junto — falso negativo silencioso.
+                achado = BLOCO_NUMERICO.search(corrigir_ocr(linha), m.end())
+                if achado and len(re.sub(r"\D", "", achado.group())) >= 3:
+                    fim = offset + achado.start()
+            campos.append(CampoMetadado(rotulo, offset + m.start(), fim, numero, offset + len(linha)))
         elif linha.strip() and encontrou_campo:
             # Uma frase inicia o corpo mesmo sem título explícito.
             if linha != linha.upper():
@@ -178,8 +193,12 @@ def motivo_distrator(candidato: dict, texto: str | None = None,
             continue
         # O extrator pode reunir dois campos adjacentes em um único span.
         # Ele continua sendo metadado quando termina dentro do último campo.
+        # A tolerância usa fim_linha (linha inteira), não o fim truncado —
+        # senão a truncatura de uma citação embutida (acima) also destrói a
+        # fusão de campos legítimos em linhas adjacentes ("Processo:.../
+        # Assistido:.../Memorial:...", sem nenhuma citação real no meio).
         if fim > campo.fim and not any(
-            outro.fim >= fim for outro in contexto.campos if outro.inicio > campo.inicio
+            outro.fim_linha >= fim for outro in contexto.campos if outro.inicio > campo.inicio
         ):
             continue
         if campo.rotulo in {"processo", "autos"}:
