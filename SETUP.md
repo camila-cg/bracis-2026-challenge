@@ -173,3 +173,22 @@ uv run pytest
 
 Os testes precisam de `data/desafio1_bracis.db`. Casos marcados como `expected failure`
 registram bugs conhecidos ainda não corrigidos.
+
+## 7. Notebooks
+
+Os notebooks de análise ficam em `src/*.ipynb` (EDA) e `analise/*.ipynb` (manipulação
+dos dados com pandas). Precisam do grupo `notebooks` (`ipykernel`, Jupyter, matplotlib),
+que o `--no-default-groups` das seções anteriores não instala.
+
+Com uv:
+
+```bash
+uv sync
+```
+
+Com pip, o `requirements.txt` já inclui esses pacotes.
+
+No VS Code, selecione como kernel o Python do `.venv` do projeto. Se aparecer o aviso
+de que é preciso instalar `ipykernel` e `pip`, o ambiente foi criado com
+`--no-default-groups`: rode `uv sync` e reinicie o kernel. Os notebooks localizam a
+raiz do projeto sozinhos, então podem ser abertos de qualquer pasta dentro do repositório.
