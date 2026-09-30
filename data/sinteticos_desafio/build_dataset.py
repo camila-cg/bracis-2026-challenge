@@ -230,7 +230,7 @@ DOCUMENTOS = [
             "EXCERTO DE PARECER\n"
             "Registro OAB/CE 55.701, lote 9830.\n"
             "Foram cotejados o Cód. de Proc. Penal-Militar, art. 5º, inc. II e o Decr. 9.83O, de 1O/6/2O19. "
-            "Em seguida, examinou-se o AI nº 1O24567-3?.2O23.8.26.OOOO/TJSP, cuja cópia estava parcialmente ilegível. "
+            "Em seguida, examinou-se o AI nº 1024567-38.2023.8.26.0000/TJSP, cuja cópia estava parcialmente ilegível. "
             "A simples palavra 'resolução' no fecho não foi tomada por referência."
         ),
         "citacoes": [
@@ -247,10 +247,10 @@ DOCUMENTOS = [
                 "justificativa": "Espécie, número e data continuam recuperáveis com a normalização O↔0.",
             },
             {
-                "trecho": "AI nº 1O24567-3?.2O23.8.26.OOOO/TJSP",
+                "trecho": "AI nº 1024567-38.2023.8.26.0000/TJSP",
                 "tipo": "JUR",
-                "dificuldade_introduzida": ["ruído plausível de OCR", "número processual parcialmente degradado"],
-                "justificativa": "Classe, sequência CNJ quase integral e tribunal conservam identidade suficiente apesar de um caractere ilegível.",
+                "dificuldade_introduzida": ["número processual em formato CNJ", "citação curta identificável"],
+                "justificativa": "Classe, número processual completo e tribunal identificam diretamente a referência.",
             },
         ],
         "distratores": [

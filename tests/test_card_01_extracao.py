@@ -106,6 +106,35 @@ class TiposDeCitacao(unittest.TestCase):
             with self.subTest(trecho=trecho):
                 self.assertEqual(candidatos("Aplicou-se " + trecho + "."), [])
 
+    def test_tema_exige_numero_apos_conector_juridico(self):
+        casos = (
+            "Tema 27",
+            "Tema nº 27",
+            "Tema n. 27",
+            "Tema número 27",
+            "Tema repetitivo 27",
+            "Tema repetitivo nº 27",
+            "Tema de repercussão geral nº 27",
+            "Tema da repercussão geral 27",
+            "Temã 2.680 da repercussão geral",
+        )
+        for trecho in casos:
+            with self.subTest(trecho=trecho):
+                self.assertEqual(
+                    [item["trecho"] for item in candidatos(trecho)],
+                    [trecho],
+                )
+
+    def test_tema_discursivo_numerado_nao_vira_citacao(self):
+        for trecho in (
+            "Tema em debate: 27",
+            "Tema da reunião: 27",
+            "Tema relevante 27",
+            "Tema sem número",
+        ):
+            with self.subTest(trecho=trecho):
+                self.assertEqual(candidatos(trecho), [])
+
     def test_lei_artigo_e_paragrafo(self):
         for trecho in ("Lei 8.078/1990", "art. 373 do CPC", "artigo 5º da Constituição", "§ 1º do art. 489 do CPC"):
             with self.subTest(trecho=trecho):
