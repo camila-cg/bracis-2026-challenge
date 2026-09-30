@@ -37,7 +37,7 @@ if hasattr(sys.stdout, "reconfigure"):
 import eda_utils as u
 import indice_utils as ind  # noqa: F401 — usado por src/validacao via p.ind
 from steps.pipeline_utils import DADOS, RAIZ
-from steps.extrair_candidatos import extrair                  # 1
+from steps.extrair_candidatos import extrair, gravar_debug_extracao  # 1
 from steps.filtrar_distratores import e_distrator, filtrar_distratores     # 2
 from steps.rotear_citacao import rotear                       # 3
 from steps.normalizar_citacao import normalizar_citacao        # 4
@@ -61,8 +61,12 @@ def processar_documento(
     detector_bio=None,
     limiares_modelo: dict[str, float] | None = None,
     verificador_citacoes=None,
+    debug_extracao: list[dict] | None = None,
 ) -> dict:
     candidatos = extrair(texto)                                        # 1
+    if debug_extracao is not None:
+        debug_extracao.append({"documento_id": documento_id, "texto": texto,
+                               "candidatos": list(candidatos)})
     candidatos = filtrar_distratores(candidatos, texto)                # 2
     eventos_deteccao = []
     if detector_bio is not None:
@@ -183,6 +187,7 @@ def main() -> None:
         "LEI": args.limiar_lei, "JUR": args.limiar_jur,
     }
 
+    debug_extracao: list[dict] = []
     documentos = [
         processar_documento(
             a.stem,
@@ -191,9 +196,11 @@ def main() -> None:
             detector_bio,
             limiares_modelo,
             verificador_citacoes,
+            debug_extracao,
         )
         for a in arquivos
     ]  # 1–6
+    print(f"debug da extração: {gravar_debug_extracao(debug_extracao, RAIZ / 'outputs')}")
     submission_csv = gravar_saida(documentos, args.saida)                                   # 7
 
     if args.avaliar:
