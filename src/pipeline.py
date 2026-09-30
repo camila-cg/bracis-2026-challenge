@@ -141,7 +141,10 @@ def main() -> None:
     parser.add_argument("--limiar-jur", type=float)
     parser.add_argument("--verificador-llm", type=str,
                         help="pasta local ou ID do Llama 3.1 8B Instruct quantizado em 4 bits")
-    parser.add_argument("--verificador-ollama", help="modelo local do Ollama, por exemplo llama3.1:8b")
+    parser.add_argument(
+        "--verificador-ollama",
+        help="modelo local do Ollama, recomendado: qwen3.6:latest",
+    )
     parser.add_argument("--endpoint-ollama", default="http://127.0.0.1:11434")
     parser.add_argument("--revisao-verificador", help="revisão exata obrigatória para ID remoto")
     parser.add_argument("--permitir-download-verificador", action="store_true")

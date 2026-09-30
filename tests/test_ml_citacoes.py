@@ -197,11 +197,13 @@ class FusaoConservadora(unittest.TestCase):
             def classificar_muitos(self, trechos):
                 self.recebidos = list(trechos)
                 return [
-                    ResultadoVerificacao("CITACAO", .8, {
-                        "CITACAO": .8, "INCERTO": .1, "NAO_CITACAO": .1,
+                    ResultadoVerificacao("CITACAO_JURISPRUDENCIA", .8, {
+                        "CITACAO_LEGISLACAO": .05, "CITACAO_JURISPRUDENCIA": .8,
+                        "INCERTO": .1, "NAO_CITACAO": .05,
                     }, "falso", "hash"),
                     ResultadoVerificacao("INCERTO", .6, {
-                        "CITACAO": .2, "INCERTO": .6, "NAO_CITACAO": .2,
+                        "CITACAO_LEGISLACAO": .1, "CITACAO_JURISPRUDENCIA": .1,
+                        "INCERTO": .6, "NAO_CITACAO": .2,
                     }, "falso", "hash"),
                 ]
 
@@ -229,6 +231,35 @@ class FusaoConservadora(unittest.TestCase):
         self.assertEqual([e["aceito"] for e in eventos_modelo], [True, False])
         self.assertEqual(eventos_modelo[1]["verificador"]["decisao"], "INCERTO")
 
+    def test_verificador_aceito_corrige_tipo_do_lora(self):
+        class VerificadorLegislacao:
+            def classificar_muitos(self, trechos):
+                return [ResultadoVerificacao("CITACAO_LEGISLACAO", .9, {
+                    "CITACAO_LEGISLACAO": .9, "CITACAO_JURISPRUDENCIA": .05,
+                    "INCERTO": .03, "NAO_CITACAO": .02,
+                }, "falso", "hash")]
+
+        texto = "Res. CNJ nº 455, de 27-4-2022"
+        resultado = fusionar(
+            [], [CitacaoModelo(0, len(texto), "JUR", .99)], texto,
+            limiares={"LEI": 0.0, "JUR": 0.0},
+            filtro_distrator=self.nao_distrator,
+            verificador=VerificadorLegislacao(),
+        )
+
+        self.assertEqual(resultado.candidatos[0]["tipo"], "lei")
+        self.assertEqual(resultado.eventos[0]["tipo_previsto"], "jurisprudencia")
+        self.assertEqual(resultado.eventos[0]["tipo_final"], "lei")
+
+    def test_classe_d_e_rejeitada(self):
+        resultado = ResultadoVerificacao("NAO_CITACAO", .9, {
+            "CITACAO_LEGISLACAO": .02, "CITACAO_JURISPRUDENCIA": .03,
+            "INCERTO": .05, "NAO_CITACAO": .9,
+        }, "falso", "hash")
+
+        self.assertFalse(resultado.aceita)
+        self.assertIsNone(resultado.tipo_pipeline)
+
     def test_verificador_com_quantidade_errada_falha_explicitamente(self):
         class Incompleto:
             def classificar_muitos(self, trechos):
@@ -244,26 +275,31 @@ class FusaoConservadora(unittest.TestCase):
 
 
 class VerificadorLLM(unittest.TestCase):
+    def test_qwen_e_o_modelo_ollama_padrao(self):
+        from ml_citacoes.verificador_llm import VerificadorOllama
+
+        self.assertEqual(VerificadorOllama().modelo, "qwen3.6:latest")
+
     def test_logits_restritos_geram_decisao_e_confianca(self):
         from ml_citacoes.verificador_llm import PROMPT_SHA256, PROMPT_VERSAO, _resultado_de_logits
 
-        resultado = _resultado_de_logits([3.0, 1.0, -2.0], modelo="local")
-        self.assertEqual(PROMPT_VERSAO, "zero_shot_v2")
-        self.assertEqual(resultado.decisao, "CITACAO")
+        resultado = _resultado_de_logits([3.0, 1.0, -2.0, -3.0], modelo="local")
+        self.assertEqual(PROMPT_VERSAO, "zero_shot_v3_quatro_classes")
+        self.assertEqual(resultado.decisao, "CITACAO_LEGISLACAO")
         self.assertEqual(resultado.modelo, "local")
         self.assertEqual(resultado.prompt_sha256, PROMPT_SHA256)
         self.assertAlmostEqual(sum(resultado.probabilidades.values()), 1.0)
-        self.assertEqual(resultado.confianca, resultado.probabilidades["CITACAO"])
+        self.assertEqual(resultado.confianca, resultado.probabilidades["CITACAO_LEGISLACAO"])
 
     def test_empate_e_deterministico_e_logits_invalidos_sao_rejeitados(self):
         from ml_citacoes.verificador_llm import _resultado_de_logits, _softmax_restrito
 
-        self.assertEqual(_resultado_de_logits([0, 0, 0], modelo="x").decisao, "INCERTO")
-        for valores in ([1, 2], [1, float("nan"), 3]):
+        self.assertEqual(_resultado_de_logits([0, 0, 0, 0], modelo="x").decisao, "INCERTO")
+        for valores in ([1, 2, 3], [1, float("nan"), 3, 4]):
             with self.assertRaises(ValueError):
                 _softmax_restrito(valores)
 
-    def test_resposta_ollama_usa_top_logprobs_das_tres_classes(self):
+    def test_resposta_ollama_usa_top_logprobs_das_quatro_classes(self):
         from ml_citacoes.verificador_llm import _resultado_ollama
 
         resposta = {"logprobs": [{
@@ -272,10 +308,11 @@ class VerificadorLLM(unittest.TestCase):
                 {"token": " A", "logprob": -0.1},
                 {"token": " B", "logprob": -2.0},
                 {"token": " C", "logprob": -3.0},
+                {"token": " D", "logprob": -4.0},
             ],
         }]}
         resultado = _resultado_ollama(resposta, modelo="ollama:teste")
-        self.assertEqual(resultado.decisao, "CITACAO")
+        self.assertEqual(resultado.decisao, "CITACAO_LEGISLACAO")
         self.assertEqual(resultado.modelo, "ollama:teste")
         with self.assertRaisesRegex(RuntimeError, "todos os rótulos"):
             _resultado_ollama({"logprobs": [{
@@ -623,8 +660,9 @@ class ExperimentoPareado(unittest.TestCase):
 
         class Verificador:
             def classificar_muitos(self, trechos):
-                return [ResultadoVerificacao('CITACAO', .7, {
-                    'CITACAO': .7, 'INCERTO': .2, 'NAO_CITACAO': .1,
+                return [ResultadoVerificacao('CITACAO_LEGISLACAO', .7, {
+                    'CITACAO_LEGISLACAO': .7, 'CITACAO_JURISPRUDENCIA': .1,
+                    'INCERTO': .1, 'NAO_CITACAO': .1,
                 }, 'falso', 'hash') for _ in trechos]
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -633,13 +671,13 @@ class ExperimentoPareado(unittest.TestCase):
             args = SimpleNamespace(dados=dados, execucao=execucao, saida=raiz/'saida')
             with patch('ml_citacoes.experimento_verificador.extrair', return_value=[]):
                 resultado = executar(args, Detector(), Verificador())
-            self.assertEqual(resultado['verificador']['contagens']['CITACAO'], 1)
+            self.assertEqual(resultado['verificador']['contagens']['CITACAO_LEGISLACAO'], 1)
             self.assertEqual(resultado['recall_adicional_aceito_sobre_regras'], 1.0)
             self.assertEqual(resultado['fp_realmente_acrescentados'], 0)
             resumo = (args.saida/'resumo.json').read_text(encoding='utf-8')
             self.assertNotIn('Referência', resumo)
             detalhes = json.loads((args.saida/'erros_locais.json').read_text(encoding='utf-8'))
-            self.assertEqual(detalhes['decisoes_llm'][0]['decisao'], 'CITACAO')
+            self.assertEqual(detalhes['decisoes_llm'][0]['decisao'], 'CITACAO_LEGISLACAO')
             self.assertEqual(detalhes['decisoes_llm'][0]['trecho'], 'Referência')
 
     def test_agregacao_exige_cinco_folds_compativeis_e_reproduzidos(self):
