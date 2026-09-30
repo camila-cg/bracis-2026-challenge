@@ -1,6 +1,4 @@
-"""Verifica usando LLM se a citação capturada apenas pelo LoRA é realmente uma citação jurídica ou é um falso posito.
-O modelo recebe somente o trecho candidato, a decisão usa os logits da próxima posição, dentre três rótulos 
-"""
+"""Classifica candidatos do LoRA por tipo jurídico usando o próximo token da LLM."""
 
 from __future__ import annotations
 
@@ -14,34 +12,57 @@ from urllib.request import Request, urlopen
 from .contratos import ResultadoVerificacao
 
 
-ROTULOS = {"A": "CITACAO", "B": "INCERTO", "C": "NAO_CITACAO"}
-PROMPT_VERSAO = "zero_shot_v2"
+ROTULOS = {
+    "A": "CITACAO_LEGISLACAO",
+    "B": "CITACAO_JURISPRUDENCIA",
+    "C": "INCERTO",
+    "D": "NAO_CITACAO",
+}
+MODELO_OLLAMA_PADRAO = "qwen3.6:latest"
+PROMPT_VERSAO = "zero_shot_v3_quatro_classes"
 
 PROMPT_SISTEMA = """Você é um especialista em direito brasileiro e deve classificar o trecho fornecido, sem tentar completar ou corrigir seu conteúdo.
 
-Responda com exatamente uma letra:
-A = citação jurídica identificável;
-B = incerto;
-C = não é citação jurídica identificável.
+Responda com exatamente uma letra, dentre as opções:
+
+A = citação de legislação;
+B = citação de jurisprudência;
+C = incerto;
+D = não é uma citação jurídica identificável.
 
 Uma citação identificável aponta, no próprio trecho, para uma fonte jurídica específica, como norma, processo, precedente, súmula, tema ou decisão. Não é necessário confirmar que a fonte realmente existe.
 
-Classifique como A quando houver ao menos uma destas formas de identificação:
-- espécie normativa, marcador jurídico ou classe processual acompanhada de número ou identificador;
-- súmula, tema ou precedente numerado;
-- decisão descritiva que combine tribunal ou órgão, ano ou data e relator identificado;
-- referência reconhecível mesmo com ruído de OCR, quebra de linha ou pontuação corrompida, desde que o trecho preserve a espécie ou classe e uma parte reconhecível do identificador, mesmo que alguns caracteres estejam corrompidos.
+Classifique como A quando o trecho identificar uma fonte normativa específica:
 
-Não exija simultaneamente tribunal, relator, ano, classe e número. Uma decisão descritiva pode ser identificável pela combinação entre tribunal, data ou ano e relator, mesmo sem número processual.
+- espécie normativa e número identificador, acrescentando órgão, ente ou ano quando necessários para eliminar ambiguidade;
+- nome oficial, nome consagrado ou sigla inequívoca da norma desde que acompanhada de número normativo, dispositivo ou outra referência concreta;
+- artigo, parágrafo, inciso ou outro dispositivo acompanhado da identificação do diploma ao qual pertence;
+- referência normativa reconhecível apesar de ruído de OCR, quebra de linha ou pontuação corrompida, desde que ainda seja possível reconhecer o diploma, a espécie normativa ou seu identificador.
 
-Classifique como C números soltos, fragmentos, nomes isolados de tribunais ou órgãos e menções genéricas a jurisprudência, legislação, matéria ou orientação. Classifique como C quando o trecho não fala de nenhuma fonte específica, apenas remete, de forma difusa, à matéria ou à orientação de um tribunal."""
+Não classifique como A números isolados, dispositivos sem diploma ou menções genéricas a lei, código, norma, regulamento ou legislação.
+
+Classifique como B quando o trecho identificar uma fonte jurisprudencial concreta por pelo menos uma destas formas:
+
+- por classe, número, tema ou súmula numerada; ou
+- decisão descritiva sem número processual que contenha obrigatoriamente:
+   1. tribunal ou órgão judicial específico;
+   2. ano ou data;
+   3. relator identificado.
+- referência jurisprudencial reconhecível apesar de ruído de OCR, quebra de linha ou pontuação corrompida, desde que ainda seja possível reconhecer a classe, o precedente ou parte suficiente do identificador.
+Ruído de OCR, quebra de linha ou pontuação corrompida podem ser tolerados, mas
+não eliminam os requisitos acima.
+
+A ausência de número não torna automaticamente uma citação inválida. Entretanto, palavras como processo, recurso, acórdão, decisão, tema, precedente ou súmula não são suficientes quando aparecem sem elementos que apontem para uma fonte concreta.
+
+Classifique como D números soltos, fragmentos, nomes isolados de tribunais ou órgãos e menções genéricas a jurisprudência, legislação, matéria ou orientação.
+Classifique como D quando o trecho não fala de nenhuma fonte específica, apenas remete, de forma difusa, à matéria ou à orientação de um tribunal, mas sem permitir identificá-lo."""
 
 PROMPT_SHA256 = hashlib.sha256(PROMPT_SISTEMA.encode("utf-8")).hexdigest()
 
 
 def _softmax_restrito(valores: Sequence[float]) -> list[float]:
-    if len(valores) != 3 or any(not math.isfinite(float(v)) for v in valores):
-        raise ValueError("são necessários três logits finitos")
+    if len(valores) != len(ROTULOS) or any(not math.isfinite(float(v)) for v in valores):
+        raise ValueError(f"são necessários {len(ROTULOS)} logits finitos")
     maior = max(float(v) for v in valores)
     exponenciais = [math.exp(float(v) - maior) for v in valores]
     total = sum(exponenciais)
@@ -53,7 +74,7 @@ def _resultado_de_logits(logits: Sequence[float], *, modelo: str) -> ResultadoVe
     letras = tuple(ROTULOS)
     maior = max(probabilidades)
     empatados = [i for i, valor in enumerate(probabilidades) if math.isclose(valor, maior)]
-    indice = letras.index("B") if len(empatados) > 1 else empatados[0]
+    indice = letras.index("C") if len(empatados) > 1 else empatados[0]
     probs_nomeadas = {ROTULOS[letra]: probabilidades[i] for i, letra in enumerate(letras)}
     return ResultadoVerificacao(
         decisao=ROTULOS[letras[indice]],
@@ -167,7 +188,7 @@ class VerificadorLlama:
 
 
 def _resultado_ollama(resposta: dict, *, modelo: str) -> ResultadoVerificacao:
-    """Converte os top-logprobs do primeiro token em probabilidades A/B/C."""
+    """Converte os top-logprobs do primeiro token em probabilidades A/B/C/D."""
     itens = resposta.get("logprobs") or []
     if not itens:
         raise RuntimeError("Ollama não retornou logprobs; atualize o Ollama")
@@ -192,7 +213,7 @@ class VerificadorOllama:
     def __init__(
         self,
         *,
-        modelo: str = "llama3.1:8b",
+        modelo: str = MODELO_OLLAMA_PADRAO,
         endpoint: str = "http://127.0.0.1:11434",
         timeout: float = 120.0,
     ):

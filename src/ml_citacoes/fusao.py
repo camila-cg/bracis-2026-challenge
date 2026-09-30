@@ -102,10 +102,14 @@ def fusionar(
         aceitos: list[tuple[CitacaoModelo, dict]] = []
         for (pred, candidato), verificacao in zip(somente_modelo, verificacoes):
             candidato["evidencia_deteccao"]["verificador"] = verificacao.como_dict()
+            tipo_verificado = verificacao.tipo_pipeline
+            if tipo_verificado is not None:
+                candidato["tipo"] = tipo_verificado
             eventos.append(candidato["evidencia_deteccao"] | {
                 "inicio": pred.inicio,
                 "fim": pred.fim,
                 "aceito": verificacao.aceita,
+                "tipo_final": candidato["tipo"] if verificacao.aceita else None,
             })
             if verificacao.aceita:
                 aceitos.append((pred, candidato))

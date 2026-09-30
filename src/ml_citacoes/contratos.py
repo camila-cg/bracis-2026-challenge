@@ -15,7 +15,12 @@ LABELS = ("O", "B-LEI", "I-LEI", "B-JUR", "I-JUR")
 LABEL2ID = {rotulo: indice for indice, rotulo in enumerate(LABELS)}
 ID2LABEL = dict(enumerate(LABELS))
 TipoBIO = Literal["LEI", "JUR"]
-DecisaoVerificador = Literal["CITACAO", "INCERTO", "NAO_CITACAO"]
+DecisaoVerificador = Literal[
+    "CITACAO_LEGISLACAO",
+    "CITACAO_JURISPRUDENCIA",
+    "INCERTO",
+    "NAO_CITACAO",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,7 +63,14 @@ class ResultadoVerificacao:
 
     @property
     def aceita(self) -> bool:
-        return self.decisao == "CITACAO"
+        return self.decisao in {"CITACAO_LEGISLACAO", "CITACAO_JURISPRUDENCIA"}
+
+    @property
+    def tipo_pipeline(self) -> str | None:
+        return {
+            "CITACAO_LEGISLACAO": "lei",
+            "CITACAO_JURISPRUDENCIA": "jurisprudencia",
+        }.get(self.decisao)
 
     def como_dict(self) -> dict:
         return asdict(self)

@@ -60,7 +60,7 @@ def _registro_evento(evento: dict, documento_id: str) -> dict:
         "documento_id": documento_id,
         "inicio": evento["inicio"],
         "fim": evento["fim"],
-        "tipo": evento["tipo_previsto"],
+        "tipo": evento.get("tipo_final") or evento["tipo_previsto"],
         "score": evento["score_bruto_modelo"],
     }
 
@@ -101,7 +101,9 @@ def executar(args, detector=None, verificador=None) -> dict:
     inicio_tempo = time.perf_counter()
     verdade, regras, lora_bruto, fusao_final = [], [], [], []
     decisoes_llm = []
-    por_decisao = {nome: [] for nome in ("CITACAO", "INCERTO", "NAO_CITACAO")}
+    por_decisao = {nome: [] for nome in (
+        "CITACAO_LEGISLACAO", "CITACAO_JURISPRUDENCIA", "INCERTO", "NAO_CITACAO",
+    )}
     invalidas = fragmentos = documentos_invalidos = 0
 
     for documento_id, doc in docs.items():
@@ -133,7 +135,8 @@ def executar(args, detector=None, verificador=None) -> dict:
                     "documento_id": documento_id,
                     "inicio": evento["inicio"],
                     "fim": evento["fim"],
-                    "tipo": evento["tipo_previsto"],
+                    "tipo": evento.get("tipo_final") or evento["tipo_previsto"],
+                    "tipo_lora": evento["tipo_previsto"],
                     "trecho": doc["texto"][evento["inicio"]:evento["fim"]],
                     "score_lora": evento["score_bruto_modelo"],
                     **verificacao,
@@ -143,7 +146,10 @@ def executar(args, detector=None, verificador=None) -> dict:
     medidor_vram.finalizar()
     erros_regras = _detalhar_erros(verdade, regras, docs)
     exclusivos = [item for grupo in por_decisao.values() for item in grupo]
-    aceitos = por_decisao["CITACAO"]
+    aceitos = [
+        *por_decisao["CITACAO_LEGISLACAO"],
+        *por_decisao["CITACAO_JURISPRUDENCIA"],
+    ]
     metricas_exclusivos = avaliar_spans(erros_regras["falsos_negativos"], exclusivos)
     metricas_aceitos = avaliar_spans(erros_regras["falsos_negativos"], aceitos)
     metricas_fusao = _metricas(verdade, fusao_final, docs)
@@ -163,7 +169,7 @@ def executar(args, detector=None, verificador=None) -> dict:
             "limiares_candidatos": {"LEI": 0.0, "JUR": 0.0},
             "entrada_llm": "somente_trecho",
             "few_shot": False,
-            "aceitas": ["CITACAO"],
+            "aceitas": ["CITACAO_LEGISLACAO", "CITACAO_JURISPRUDENCIA"],
             "rejeitadas": ["INCERTO", "NAO_CITACAO"],
         },
         "n_documentos": len(docs),
