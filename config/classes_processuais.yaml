@@ -8,11 +8,12 @@
     "arr", "ar", "embargos de declaracao", "ed", "edcl", "eds", "sumula", "sum",
     "sumula vinculante", "tema", "repercussao geral", "processo", "acordao", "julgado",
     "precedente", "agr", "mandado de seguranca", "apelacao", "apelacao criminal", "sv",
-    "ap crim", "ap criminal"
+    "ap crim", "ap criminal",
+    "airr", "rrag", "pext", "embargos infringentes"
   ],
-  "marcadores_exatos": ["apelacao", "sv"],
+  "marcadores_exatos": ["apelacao", "sv", "airr", "rrag", "pext"],
 
-  "siglas": ["re", "resp", "aresp", "respe", "rhc", "hc", "rse", "apl", "rms", "rr", "arr", "ar", "rp", "agarr", "rcl", "recl", "agr", "agrg", "agint", "ed", "edcl", "eds"],
+  "siglas": ["re", "resp", "aresp", "respe", "rhc", "hc", "rse", "apl", "rms", "rr", "arr", "ar", "rp", "agarr", "rcl", "recl", "agr", "agrg", "agint", "ed", "edcl", "eds", "airr", "rrag"],
   "siglas_classes_ambiguas": {
     "ai": {
       "classe": "agravodeinstrumento",
@@ -76,6 +77,7 @@
     {"padrao": "\\bAG\\s*INT\\b|\\bAGRAVO\\s+INTERNO\\b", "modificador": "agravo_interno"},
     {"padrao": "\\bAG\\s*RG\\b|\\bAGRAVO\\s+REGIMENTAL\\b", "modificador": "agravo_regimental"},
     {"padrao": "\\bED\\s*CL\\b|\\bEMBARGOS\\s+DE\\s+DECLARACAO\\b", "modificador": "embargos_declaracao"},
-    {"padrao": "\\bEMBARGOS\\s+DE\\s+DIVERGENCIA\\b", "modificador": "embargos_divergencia"}
+    {"padrao": "\\bEMBARGOS\\s+DE\\s+DIVERGENCIA\\b", "modificador": "embargos_divergencia"},
+    {"padrao": "\\bPEXT\\b", "modificador": "pedido_de_extensao"}
   ]
 }
