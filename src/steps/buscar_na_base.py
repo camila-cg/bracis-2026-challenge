@@ -143,11 +143,15 @@ class Resolvedor:
             }
             if len(por_modificador) == 1:
                 return por_modificador
+        # O parser do TSE às vezes deixa o preâmbulo "TRIBUNAL SUPERIOR
+        # ELEITORAL ACÓRDÃO" em apenas um dos registros duplicados. Comparar a
+        # classe bruta favoreceria artificialmente o registro sem esse ruído e
+        # transformaria uma ambiguidade real em um ID escolhido às cegas.
         trecho_norm = ind._normalizar_para_comparar(citacao.normalizado)
         batidas = {
             registro["id"] for registro in compativeis
-            if ind._normalizar_para_comparar(registro["classe"])
-            and ind._normalizar_para_comparar(registro["classe"]) in trecho_norm
+            if ind._classe_para_desempate(registro["classe"])
+            and ind._classe_para_desempate(registro["classe"]) in trecho_norm
         }
         return batidas if len(batidas) == 1 else ids
 

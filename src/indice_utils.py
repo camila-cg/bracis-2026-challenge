@@ -286,6 +286,19 @@ def _normalizar_para_comparar(s: str) -> str:
     return _NAO_ALFANUM.sub("", sem_acento.lower())
 
 
+_RUIDO_CLASSE_TSE = re.compile(
+    r"^(?:.*?\bAC[ÓO]RD[ÃA]O\s+"
+    r"|(?:PUBLICADO\s+EM\s+SESS[ÃA]O\s+)?(?:TRIBUNAL\.?\s+)?SUPERIOR\s+ELEITORAL\s+"
+    r"|«\s*)",
+    re.I,
+)
+
+
+def _classe_para_desempate(classe: str) -> str:
+    """Remove preâmbulo do TSE antes de comparar a classe por extenso."""
+    return _normalizar_para_comparar(_RUIDO_CLASSE_TSE.sub("", classe).strip())
+
+
 TRIBUNAL_CITADO = re.compile(r"\b(?:" + "|".join(map(re.escape, carregar_config("tribunais")["siglas"])) + r")\b", re.I)
 UF_CITADA = re.compile(r"(?:/|\s-\s|\(\s*)([A-Z]{2})(?=\b|\s*\))", re.I)
 CLASSES_CITADAS = tuple(

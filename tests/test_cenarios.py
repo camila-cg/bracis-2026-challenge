@@ -80,6 +80,19 @@ class ResolucaoAcordaos(unittest.TestCase):
         # comportamento anterior (resolve pelo número, único candidato).
         self.assertEqual(self.resolvedor.acordao("AgInt na Rcl 36.670/SP")[:2], ("real", 2679568224))
 
+    def test_ruido_do_cabecalho_tse_nao_desempata_duplicata(self):
+        # Os dois IDs são embargos no mesmo processo. Um cabeçalho deixou o
+        # preâmbulo do TSE dentro da classe; isso não é informação da citação e
+        # não pode escolher o outro registro como se fosse único.
+        trecho = "Embargos de Declaração no Recurso Especial Eleitoral nº 0600393-67.2020.6.06.0075 do TSE"
+        resultado = self.resolvedor.resolver_citacao(normalizar_citacao(
+            {"trecho": trecho, "inicio": 0, "fim": len(trecho)},
+            "acordao",
+            ja_normalizado=True,
+        ))
+        self.assertEqual(resultado.classe, "incompleta")
+        self.assertEqual(resultado.candidatos, (1888328727, 1931804811))
+
     def test_apelacao_generica_resolve_registro_de_apelacao_criminal(self):
         # A citação diz só "APL" (genérico); o acórdão real no STM tem
         # classe "APELAÇÃO CRIMINAL" (mais específica). Exigir bater
