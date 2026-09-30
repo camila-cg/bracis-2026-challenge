@@ -168,8 +168,12 @@ def _remover_anos_contextuais(trecho: str) -> str:
     A normalização agrupa dígitos separados por espaços. Sem esta etapa,
     ``REsp 2023 1.741.784`` viraria um único identificador. Anos que fazem
     parte de CNJ, datas ou que são o único número da citação são preservados.
+
+    A busca roda sobre o texto com o OCR já corrigido (o comprimento não muda).
+    Sem isso, o trecho ``ano.segmento.tribunal`` de um CNJ seguido de uma letra
+    de OCR (``2025.7.0O.0000``) parece a data ``2025.7.0`` e é apagado.
     """
-    limpo = _DATA_NUMERICA.sub(lambda m: " " * len(m.group()), trecho)
+    limpo = _DATA_NUMERICA.sub(lambda m: " " * len(m.group()), corrigir_ocr(trecho))
     limpo = ANO_SOLTO.sub(lambda m: " " * len(m.group()), limpo)
     for ano in reversed(list(_ANO.finditer(limpo))):
         anterior = limpo[ano.start() - 1] if ano.start() else ""

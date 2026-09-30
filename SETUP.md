@@ -181,7 +181,8 @@ uv run --locked --no-default-groups --group dev pytest -q
 ```
 
 Com `uv sync --locked` sem as flags, o ambiente inclui também os notebooks, e basta
-`uv run --locked pytest -q`. A suíte leva cerca de 20 s.
+`uv run --locked pytest -q`. A suíte leva cerca de 1 min; o gate do estresse
+(`tests/test_estresse.py`) responde por cerca de 35 s disso.
 
 Use `--locked`: ele falha se o `uv.lock` não corresponder ao `pyproject.toml`, em vez
 de reescrevê-lo em silêncio. Só rode `uv lock` ao mudar dependências, e commite o
@@ -207,6 +208,7 @@ os pisos ficam nas constantes do topo de cada teste.
 | Registro de regressão: casos que já geraram erro e controles | `tests/test_casos_regressao.py` (lê `analise/casos_regressao.csv`) | — |
 | Holdout sintético (ZIP saneado), pontuado pela métrica oficial | `tests/test_holdout_zip.py` | `uv run --locked --no-default-groups python src/validacao/holdout_zip.py --detalhes` |
 | Base canônica inteira, por tribunal, com falsos positivos | `tests/test_base_inteira.py` | `uv run --locked --no-default-groups python src/validacao/teste_base_inteira.py` |
+| Estresse: ruído e troca de dígito nas citações do dev (4 execuções, cerca de 35 s) | `tests/test_estresse.py` | `uv run --locked --no-default-groups python src/validacao/estresse.py --seeds 3` (cerca de 1 min) |
 | Dev (26 documentos) | — | `uv run --locked --no-default-groups python src/pipeline.py --avaliar` |
 
 Ao melhorar um número, suba o piso na mesma mudança. No registro de regressão, um

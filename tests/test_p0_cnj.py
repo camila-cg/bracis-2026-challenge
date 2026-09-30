@@ -12,7 +12,7 @@ import eda_utils as u
 import indice_utils as ind
 from pipeline import processar_documento
 from steps.buscar_na_base import Resolvedor
-from steps.normalizar_citacao import normalizar_citacao
+from steps.normalizar_citacao import _remover_anos_contextuais, normalizar_citacao
 from steps.normalizar_numeros import normalizar_trecho
 from steps.rotear_citacao import ROTA_ACORDAO
 
@@ -167,6 +167,44 @@ class NormalizacaoEstritaCnj(unittest.TestCase):
                 self.assertFalse(u.cnj_adulterado(trecho))
 
 
+# CNJs do cenário de ruído do estresse: letra de OCR no lugar de um zero, quebra
+# de linha no meio e, no segundo, um ponto perdido.
+CNJ_COM_OCR_E_QUEBRA = "RSE nº 7000768-37.\n2025.7.0O.0000 - RS"
+CNJ_COM_OCR_E_PONTO_PERDIDO = "APL 7000136-79.\n2023.7.00O000 - RS"
+
+
+class AnosContextuaisNaoApagamCnj(unittest.TestCase):
+    """`ano.segmento.tribunal` de um CNJ com letra de OCR não é uma data."""
+
+    def test_cnj_com_letra_de_ocr_mantem_o_ano_e_o_comprimento(self):
+        for trecho in (CNJ_COM_OCR_E_QUEBRA, CNJ_COM_OCR_E_PONTO_PERDIDO,
+                       "RSE nº 7000768-37.2025.7.0O.0000", "APL 7000136-79.2023.7.OO.0000"):
+            with self.subTest(trecho=trecho):
+                resultado = _remover_anos_contextuais(trecho)
+                self.assertEqual(len(resultado), len(trecho))
+                self.assertRegex(resultado, r"20(?:25|23)\.7")
+
+    def test_anos_e_datas_de_contexto_continuam_sendo_apagados(self):
+        # Caracterização: a correção não pode reabrir o erro que a função resolve.
+        casos = (
+            ("REsp 2023 1.741.784/PR", "2023"),
+            ("Precedente de 2023: REsp 1.741.784/PR do STJ", "2023"),
+            ("julgado em 12/05/2023, REsp 1.741.784/PR", "2023"),
+            ("julgado em 2023.5.12, REsp 1.741.784/PR", "2023"),
+        )
+        for trecho, ano in casos:
+            with self.subTest(trecho=trecho):
+                resultado = _remover_anos_contextuais(trecho)
+                self.assertNotIn(ano, resultado)
+                self.assertIn("1.741.784", resultado)
+                self.assertEqual(len(resultado), len(trecho))
+
+    def test_cnj_valido_ou_sem_ruido_nao_muda(self):
+        for trecho in (f"APL {CNJ_REAL}/RS", "310-76.2016.6.16.0006", "REsp 1.741.784/PR do STJ"):
+            with self.subTest(trecho=trecho):
+                self.assertEqual(_remover_anos_contextuais(trecho), trecho)
+
+
 class ResolucaoEstritaCnj(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -254,6 +292,29 @@ class ResolucaoEstritaCnj(unittest.TestCase):
         self.assertEqual(len(citacoes), 1)
         self.assertEqual(citacoes[0]["classificacao"], "real")
         self.assertEqual(citacoes[0]["resolucao"], {"id_canonico": "2663361645"})
+
+    def test_cnj_com_letra_de_ocr_e_quebra_de_linha_resolve_o_acordao_certo(self):
+        for trecho, id_esperado in (
+            (CNJ_COM_OCR_E_QUEBRA, 6688597116),
+            (CNJ_COM_OCR_E_PONTO_PERDIDO, 2161632985),
+        ):
+            with self.subTest(trecho=trecho):
+                citacoes = processar_documento("sintetico", trecho, self.resolvedor)["citacoes"]
+                self.assertEqual(len(citacoes), 1)
+                self.assertEqual(citacoes[0]["classificacao"], "real")
+                self.assertEqual(citacoes[0]["resolucao"], {"id_canonico": str(id_esperado)})
+
+    def test_cnj_com_letra_de_ocr_e_digito_trocado_continua_inventada(self):
+        # O ajuste não pode tornar a leitura mais permissiva com identificadores adulterados.
+        for trecho in (
+            "RSE nº 7000768-37.\n2025.7.0O.0001 - RS",
+            "RSE nº 7000769-37.\n2025.7.0O.0000 - RS",
+            "APL 7000136-79.\n2023.7.00O000 9 - RS",
+        ):
+            with self.subTest(trecho=trecho):
+                citacoes = processar_documento("sintetico", trecho, self.resolvedor)["citacoes"]
+                self.assertEqual(len(citacoes), 1)
+                self.assertNotEqual(citacoes[0]["classificacao"], "real")
 
     def test_cnj_malformado_informa_o_motivo(self):
         citacao = normalizar_citacao(
