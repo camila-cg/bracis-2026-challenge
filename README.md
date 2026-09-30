@@ -66,8 +66,13 @@ que de fato gerou as saídas.
 ### Testes
 
 ```bash
-uv run pytest
+uv sync --locked --no-default-groups --group dev
+uv run --locked --no-default-groups --group dev pytest -q
 ```
+
+Sem `data/desafio1_bracis.db`, os testes que dependem da base são pulados. A seção 6
+do [SETUP.md](SETUP.md) descreve os gates de generalização (registro de regressão,
+holdout sintético e base inteira), os dados necessários e o uso com WSL.
 
 ## Overview
 

@@ -87,8 +87,10 @@ uv run --no-default-groups python src/pipeline.py
 ```
 
 `--no-default-groups` instala só o necessário para o pipeline (`pandas`), sem os
-grupos `notebooks` (Jupyter, matplotlib) e `dev` (pytest). Para desenvolver, use
-`uv sync` sem a flag, que instala tudo.
+grupos `dev` (pytest) e `notebooks` (Jupyter, matplotlib). Para desenvolver, use
+`uv sync` sem a flag, que instala também esses dois grupos (definidos em
+`default-groups` no `pyproject.toml`). Para rodar os testes e gates com o mínimo,
+veja a seção 6.
 
 ### Com pip
 
@@ -136,7 +138,9 @@ Só é preciso refazer o `docker build` quando o código ou as dependências mud
 O pipeline grava:
 
 - `saida/json/<documento_id>.json`: um JSON por documento (contrato do desafio);
-- `saida/submission.csv`: o arquivo de submissão do Kaggle.
+- `saida/submission.csv`: o arquivo de submissão do Kaggle;
+- `outputs/extracao_<data>.csv`: um CSV de depuração da extração por execução, com os
+  candidatos de cada documento. Não faz parte da submissão e fica fora do git.
 
 Opções de `src/pipeline.py`:
 
@@ -165,14 +169,59 @@ O script valida o `saida/submission.csv` e cria `saida/submissao_<commit>/` com:
 Se houver mudanças não commitadas, o script recusa gerar o bundle; use
 `--permitir-sujo` apenas para testes.
 
-## 6. Testes
+## 6. Testes e gates
+
+### Rodar
+
+Instalação mínima (só `pandas` e `pytest`, o que os testes usam):
 
 ```bash
-uv run pytest
+uv sync --locked --no-default-groups --group dev
+uv run --locked --no-default-groups --group dev pytest -q
 ```
 
-Os testes precisam de `data/desafio1_bracis.db`. Casos marcados como `expected failure`
-registram bugs conhecidos ainda não corrigidos.
+Com `uv sync --locked` sem as flags, o ambiente inclui também os notebooks, e basta
+`uv run --locked pytest -q`. A suíte leva cerca de 20 s.
+
+Use `--locked`: ele falha se o `uv.lock` não corresponder ao `pyproject.toml`, em vez
+de reescrevê-lo em silêncio. Só rode `uv lock` ao mudar dependências, e commite o
+`uv.lock` junto. Se aparecer `No module named pytest`, o ambiente foi criado com
+`--no-default-groups`: acrescente `--group dev`.
+
+### Dados
+
+Os testes e gates usam `data/desafio1_bracis.db` (e `data/txt` e
+`data/goldenset_offsets.csv` para `--avaliar`), que não vão no git: copie-os como na
+seção 1. Sem a base, os testes que dependem dela são **pulados**, não falham. Numa
+cópia limpa, sem dados, 167 testes passam e 57 são pulados; com os dados, todos
+passam. O dataset sintético do holdout, `datasets/dataset_citacoes_br_sintetico_2026_seed26092217.zip`,
+é versionado.
+
+### Gates de generalização
+
+O dev está saturado (macro-F1 1,0) e só acusa regressão. Estes gates medem fora dele;
+os pisos ficam nas constantes do topo de cada teste.
+
+| Gate | Teste | Script para ver os números |
+|---|---|---|
+| Registro de regressão: casos que já geraram erro e controles | `tests/test_casos_regressao.py` (lê `analise/casos_regressao.csv`) | — |
+| Holdout sintético (ZIP saneado), pontuado pela métrica oficial | `tests/test_holdout_zip.py` | `uv run --locked --no-default-groups python src/validacao/holdout_zip.py --detalhes` |
+| Base canônica inteira, por tribunal, com falsos positivos | `tests/test_base_inteira.py` | `uv run --locked --no-default-groups python src/validacao/teste_base_inteira.py` |
+| Dev (26 documentos) | — | `uv run --locked --no-default-groups python src/pipeline.py --avaliar` |
+
+Ao melhorar um número, suba o piso na mesma mudança. No registro de regressão, um
+caso `aberto` que passa a funcionar faz o teste falhar de propósito: mude o
+`modo_teste` da linha para `regressao` e atualize o `status` com o commit.
+
+### Windows e WSL na mesma pasta
+
+O `.venv` tem layout por sistema operacional (`Scripts` no Windows, `bin` no
+Linux). Se a mesma pasta é usada nos dois, o uv recria o `.venv` a cada troca. Evite
+isso apontando um ambiente por sistema, fora do repositório, por exemplo no WSL:
+
+```bash
+export UV_PROJECT_ENVIRONMENT=~/.venvs/bracis-wsl
+```
 
 ## 7. Notebooks
 

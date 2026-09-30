@@ -35,4 +35,4 @@ llm = [
 
 [tool.uv]
 package = false
-default-groups = ["notebooks"]
+default-groups = ["dev", "notebooks"]
