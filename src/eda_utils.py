@@ -185,6 +185,10 @@ _CHAVE_CNJ = re.compile(
 # evita que um identificador malformado escape para o fallback genérico.
 _CANDIDATO_CNJ = re.compile(r"(?<!\d)\d+-\d{2}\.")
 
+# Cauda de um CNJ: DV.ano.segmento.tribunal.origem, sem depender do que vem antes.
+_CAUDA_CNJ_PADRAO = r"\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}"
+_CAUDA_CNJ = re.compile(rf"(?<!\d){_CAUDA_CNJ_PADRAO}")
+
 # Número no estilo STF/STJ: 1.741.784 / 1741784 / 1.741. 784
 NUMERO_LIVRE = re.compile(r"\d[\d.\s]{2,}\d|\d{3,}")
 
@@ -215,12 +219,32 @@ _LETRA_ADJACENTE_A_DIGITO = re.compile(
 )
 
 
+# OCR e editores trocam o hífen do CNJ por outros traços: hífen Unicode, hífen
+# não separável, traço numérico, meia-risca, travessão, barra horizontal e sinal
+# de menos. O traço só é tratado como hífen quando a cauda do CNJ
+# (DV.ano.J.TR.origem) vem logo depois; intervalos ("12—15") ficam como estão.
+_TRACOS_TIPOGRAFICOS = "‐-―−"
+# Colado aos dois lados: troca um caractere por outro, o comprimento não muda.
+_TRACO_COLADO_A_CAUDA_CNJ = re.compile(rf"(?<=\d)[{_TRACOS_TIPOGRAFICOS}](?={_CAUDA_CNJ_PADRAO})")
+# Com espaços em volta: muda o comprimento, só serve onde não há posições a preservar.
+_TRACO_ANTES_DA_CAUDA_CNJ = re.compile(rf"(?<=\d)\s*[{_TRACOS_TIPOGRAFICOS}]\s*(?={_CAUDA_CNJ_PADRAO})")
+
+
+def normalizar_traco_de_cnj(texto: str) -> str:
+    """Traço tipográfico (com ou sem espaços) antes da cauda de um CNJ vira hífen."""
+    return _TRACO_ANTES_DA_CAUDA_CNJ.sub("-", texto)
+
+
 def corrigir_ocr_em_numeros(texto: str) -> str:
-    """Corrige OCR numérico sem atravessar prefixos, classes ou tribunais."""
+    """Corrige OCR numérico sem atravessar prefixos, classes ou tribunais.
+
+    Preserva o comprimento do texto: há quem use posições do resultado.
+    """
 
     def _trocar(m: re.Match) -> str:
         return "".join(OCR_PARA_DIGITO.get(c, c) for c in m.group())
 
+    texto = _TRACO_COLADO_A_CAUDA_CNJ.sub("-", texto)
     # A estrutura completa permite corrigir segmentos CNJ compostos apenas por
     # letras OCR (``.OO.OOOO``) sem transformar prefixos como ``TST-123``.
     texto = _CNJ_COM_OCR.sub(_trocar, texto)
@@ -311,7 +335,8 @@ def variantes_numero(trecho: str) -> list[str]:
     três, e a sequência crua de dígitos. Aplica a correção de OCR antes.
     """
     limpo = corrigir_ocr_em_numeros(trecho)
-    sem_espaco = re.sub(r"\s+", "", limpo)
+    # Sem espaços, um traço que tinha espaço em volta também fica colado.
+    sem_espaco = _TRACO_COLADO_A_CAUDA_CNJ.sub("-", re.sub(r"\s+", "", limpo))
 
     # Permite que o resolvedor receba diretamente a chave já selecionada por
     # ``normalizar_citacao``. Essa é a entrada segura para o fallback FTS.
@@ -349,6 +374,13 @@ def variantes_numero(trecho: str) -> list[str]:
     if _CANDIDATO_CNJ.search(sem_espaco):
         return []
 
+    # A cauda de um CNJ (DV.ano.J.TR.origem) sem um CNJ válido é um CNJ partido
+    # (separador estranho entre o sequencial e o DV). O que sobra antes dela, o
+    # sequencial, não identifica nada: mandá-lo ao FTS casaria com qualquer
+    # documento que mencione aquele número.
+    if _CAUDA_CNJ.search(sem_espaco):
+        return []
+
     m = NUMERO_LIVRE.search(re.sub(r"\s+", " ", limpo))
     if not m:
         return []
@@ -362,9 +394,10 @@ def variantes_numero(trecho: str) -> list[str]:
 
 
 # Estrutura de um CNJ sem exigir fronteiras: serve só para reconhecer que o
-# trecho *tenta* ser um CNJ. Mais estreita que ``_CANDIDATO_CNJ`` de propósito,
-# para que um intervalo de páginas ("fls. 12-14.") não conte como CNJ.
-_ESTRUTURA_CNJ = re.compile(r"\d+-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}")
+# trecho *tenta* ser um CNJ, com um ou dois símbolos entre o sequencial e o DV.
+# Mais estreita que ``_CANDIDATO_CNJ`` de propósito, para que um intervalo de
+# páginas ("fls. 12-14.") não conte como CNJ.
+_ESTRUTURA_CNJ = re.compile(r"\d+[^\w\s.]{1,2}\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}")
 
 
 def cnj_adulterado(trecho: str) -> bool:
@@ -372,10 +405,11 @@ def cnj_adulterado(trecho: str) -> bool:
 
     Lê o trecho como ``variantes_numero`` (OCR corrigido, sem espaços), então os
     dois concordam: quando ``variantes_numero`` descarta o bloco por ter dígito
-    a mais, sufixo ou prefixo, esta função diz que foi adulteração. Um
-    identificador explícito e inválido não é identificador ausente.
+    a mais, sufixo, prefixo ou separador estranho, esta função diz que foi
+    adulteração. Um identificador explícito e inválido não é identificador
+    ausente.
     """
-    sem_espaco = re.sub(r"\s+", "", corrigir_ocr_em_numeros(trecho))
+    sem_espaco = _TRACO_COLADO_A_CAUDA_CNJ.sub("-", re.sub(r"\s+", "", corrigir_ocr_em_numeros(trecho)))
     if formatar_cnj_para_fts(sem_espaco) is not None or _buscar_cnj_isolado(sem_espaco):
         return False
     return bool(_ESTRUTURA_CNJ.search(sem_espaco))

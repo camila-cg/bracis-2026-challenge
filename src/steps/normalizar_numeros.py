@@ -22,8 +22,16 @@ def canonizar_bloco(digitos: str) -> str:
     return u.agrupar_milhares(digitos)
 
 
+_CAUDA_CNJ_ISOLADA = re.compile(r"\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}")
+
+
 def _canonizar_match(m: re.Match) -> str:
     bruto = m.group(0)
+    if _CAUDA_CNJ_ISOLADA.fullmatch(bruto):
+        # A cauda de um CNJ sozinha é um CNJ partido (separador estranho antes
+        # do DV). Reagrupá-la em milhares apagaria a estrutura e deixaria só o
+        # sequencial como "número"; preservada, a validação estrita a rejeita.
+        return bruto
     digitos = re.sub(r"\D", "", bruto)
     if len(digitos) >= DIGITOS_CNJ_MIN and re.search(r"[-–]", bruto):
         sequencial, fim = re.split(r"[-–]", bruto, maxsplit=1)
@@ -38,7 +46,9 @@ def _canonizar_match(m: re.Match) -> str:
 
 def normalizar_trecho(trecho: str) -> str:
     """Trecho com cada bloco numérico reescrito na forma canônica do índice."""
-    return BLOCO_NUMERICO.sub(_canonizar_match, corrigir_ocr(trecho))
+    # Um travessão com espaços antes da cauda do CNJ ("1036 — 78.2013...") é o
+    # hífen do CNJ; sem isso o bloco numérico acaba em "1036".
+    return BLOCO_NUMERICO.sub(_canonizar_match, u.normalizar_traco_de_cnj(corrigir_ocr(trecho)))
 
 
 def normalizar(trecho: str, rota: str) -> str:

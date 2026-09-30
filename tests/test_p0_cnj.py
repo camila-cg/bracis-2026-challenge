@@ -91,6 +91,56 @@ class NormalizacaoEstritaCnj(unittest.TestCase):
         self.assertIsNone(u.CNJ.search(normalizado))
         self.assertEqual(u.variantes_numero(normalizado), [])
 
+    def test_tracos_tipograficos_entre_digitos_valem_como_hifen_no_cnj(self):
+        # OCR e editores trocam o hífen do CNJ por travessão, menos etc. O número
+        # é o mesmo; só o glifo mudou.
+        for glifo in ("‐", "‑", "‒", "–", "—", "―", "−"):
+            with self.subTest(glifo=f"U+{ord(glifo):04X}"):
+                com_glifo = f"7000136{glifo}79.2023.7.00.0000"
+                self.assertEqual(u.chave_cnj(com_glifo), CHAVE_REAL)
+                self.assertEqual(u.variantes_numero(com_glifo), [CNJ_REAL])
+                self.assertFalse(u.cnj_adulterado(f"APL {com_glifo}/RS"))
+
+    def test_travessao_espacado_tambem_vale_como_hifen_no_cnj(self):
+        self.assertEqual(u.variantes_numero("7000136 — 79.2023.7.00.0000"), [CNJ_REAL])
+        self.assertEqual(
+            u.variantes_numero("310 — 76.2016.6.16.0006"),
+            ["310-76.2016.6.16.0006", "0000310-76.2016.6.16.0006"],
+        )
+
+    def test_cnj_partido_nao_entrega_o_sequencial_como_numero_livre(self):
+        # Se a cauda DV.ano.J.TR.origem existe mas o CNJ não fecha, sobrar só o
+        # sequencial (``1036``) seria mandar um bloco curto ao FTS.
+        for partido in (
+            "1036~78.2013.5.03.0110",
+            "1036/78.2013.5.03.0110",
+            "1036 ~ 78.2013.5.03.0110",
+        ):
+            with self.subTest(partido=partido):
+                self.assertEqual(u.variantes_numero(partido), [])
+                self.assertTrue(u.cnj_adulterado(f"TST RR {partido}"))
+
+    def test_traco_so_vira_hifen_quando_a_cauda_do_cnj_vem_depois(self):
+        # Intervalos e datas seguem como estavam, e a correção colada não muda o
+        # comprimento (há quem use posições do resultado).
+        for texto in ("fls. 12—15", "REsp 1.741.784/PR, pág. 12—15.", "12—05—2023"):
+            with self.subTest(texto=texto):
+                self.assertEqual(u.corrigir_ocr_em_numeros(texto), texto)
+                self.assertEqual(u.normalizar_traco_de_cnj(texto), texto)
+        self.assertFalse(u.cnj_adulterado("REsp 1.741.784/PR, pág. 12—15."))
+        colado = f"APL 7000136—79.2023.7.00.0000/RS"
+        self.assertEqual(len(u.corrigir_ocr_em_numeros(colado)), len(colado))
+        self.assertEqual(u.corrigir_ocr_em_numeros(colado), f"APL {CNJ_REAL}/RS")
+
+    def test_normalizacao_do_trecho_preserva_a_cauda_de_cnj_partido(self):
+        for partido in ("TST RR 1036~78.2013.5.03.0110", "TST RR 1036/78.2013.5.03.0110"):
+            with self.subTest(partido=partido):
+                self.assertIn("78.2013.5.03.0110", normalizar_trecho(partido))
+        self.assertEqual(
+            normalizar_trecho("TST RR 1036 — 78.2013.5.03.0110"),
+            "TST RR 1036-78.2013.5.03.0110",
+        )
+
     def test_cnj_adulterado_e_reconhecido_pela_estrutura(self):
         for adulterado in (
             "97000136-79.2023.7.00.0000",
@@ -171,6 +221,39 @@ class ResolucaoEstritaCnj(unittest.TestCase):
                 self.assertEqual(classe, "inventada")
                 self.assertIsNone(id_canonico)
                 self.assertEqual(caminho, "acordao_zero")
+
+    def test_cnj_com_traco_tipografico_resolve_para_o_mesmo_id_que_com_hifen(self):
+        for glifo in ("‐", "‑", "‒", "–", "—", "―", "−"):
+            with self.subTest(glifo=f"U+{ord(glifo):04X}"):
+                self.assertEqual(
+                    self.resolvedor.acordao(f"TST RR 1036{glifo}78.2013.5.03.0110, 5ª T., rel. Min. Douglas Alencar Rodrigues"),
+                    ("real", 2663361645, "acordao_indice"),
+                )
+                self.assertEqual(
+                    self.resolvedor.acordao(f"APL 7000136{glifo}79.2023.7.00.0000/RS")[:2],
+                    ("real", 2161632985),
+                )
+
+    def test_cnj_adulterado_com_traco_tipografico_continua_inventada(self):
+        for glifo in ("–", "—"):
+            with self.subTest(glifo=f"U+{ord(glifo):04X}"):
+                classe, id_canonico, caminho = self.resolvedor.acordao(
+                    f"APL 97000136{glifo}79.2023.7.00.0000/RS"
+                )
+                self.assertEqual((classe, id_canonico, caminho), ("inventada", None, "acordao_zero"))
+
+    def test_cnj_partido_nunca_resolve_por_um_bloco_curto(self):
+        for partido in ("1036~78.2013.5.03.0110", "1036/78.2013.5.03.0110"):
+            with self.subTest(partido=partido):
+                classe, id_canonico, caminho = self.resolvedor.acordao(f"TST RR {partido}, 5ª T.")
+                self.assertEqual((classe, id_canonico, caminho), ("inventada", None, "acordao_zero"))
+
+    def test_documento_ponta_a_ponta_com_travessao_resolve_o_acordao_certo(self):
+        texto = "Conforme o TST RR 1036—78.2013.5.03.0110, 5ª T., rel. Min. Douglas Alencar Rodrigues."
+        citacoes = processar_documento("sintetico", texto, self.resolvedor)["citacoes"]
+        self.assertEqual(len(citacoes), 1)
+        self.assertEqual(citacoes[0]["classificacao"], "real")
+        self.assertEqual(citacoes[0]["resolucao"], {"id_canonico": "2663361645"})
 
     def test_cnj_malformado_informa_o_motivo(self):
         citacao = normalizar_citacao(
