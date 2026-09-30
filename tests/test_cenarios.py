@@ -61,6 +61,22 @@ class ResolucaoAcordaos(unittest.TestCase):
         with patch.object(ind, "resolver", return_value=set()):
             self.assertEqual(self.resolvedor.acordao("REsp 1.741.784/SC")[:2], ("inventada", None))
 
+    def test_fallback_sem_parser_nao_aceita_classe_ou_uf_como_curinga(self):
+        for trecho in (
+            "Habeas Corpus nº 184-70.2012.6.20.0033 do TSE",
+            "Recurso Especial Eleitoral nº 184-70.2012.6.20.0033/SP do TSE",
+            "Habeas Corpus nº 310-03.2012.6.09.0074 do TSE",
+        ):
+            with self.subTest(trecho=trecho):
+                resultado = self.resolvedor.resolver_citacao(normalizar_citacao(
+                    {"trecho": trecho, "inicio": 0, "fim": len(trecho)},
+                    "acordao",
+                    ja_normalizado=True,
+                ))
+                self.assertEqual(resultado.classe, "incompleta")
+                self.assertEqual(resultado.caminho, "acordao_ambigua")
+                self.assertEqual(resultado.motivo, "metadados_nao_verificaveis")
+
     def test_estagio_recursal_desempata_colisao_de_numero(self):
         # 1.599.372/PR tem dois acórdãos reais no mesmo tribunal/UF/classe
         # (mesmo balde "recursoespecial"): um AgInt, outro Embargos de

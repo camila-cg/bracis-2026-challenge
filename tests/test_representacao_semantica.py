@@ -76,6 +76,17 @@ class DecisaoSemantica(unittest.TestCase):
             resultado = self.resolvedor.resolver_citacao(citacao("REsp 1.741.784/SC do STJ", "acordao"))
         self.assertEqual((resultado.classe, resultado.caminho), ("inventada", "acordao_zero"))
 
+    def test_fallback_sem_metadados_nao_confirma_classe_explicita(self):
+        self.resolvedor.acordaos_por_numero = {}
+        self.resolvedor.metadados_por_id = {1: ("TSE", "", None)}
+        with patch("steps.buscar_na_base.u.resolver_por_numero", return_value={1: 0}):
+            resultado = self.resolvedor.resolver_citacao(citacao(
+                "Habeas Corpus nº 184-70.2012.6.20.0033 do TSE", "acordao"
+            ))
+        self.assertEqual((resultado.classe, resultado.caminho), ("incompleta", "acordao_ambigua"))
+        self.assertEqual(resultado.candidatos, (1,))
+        self.assertEqual(resultado.motivo, "metadados_nao_verificaveis")
+
     def test_multiplos_normativos_continuam_incompletos(self):
         self.resolvedor.normativos["lei|Código de Processo Civil|373"].append({"id": 43})
         resultado = self.resolvedor.resolver_citacao(citacao("art. 373 do CPC", "lei"))

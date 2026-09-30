@@ -100,8 +100,18 @@ class Resolvedor:
             # O fallback recebe somente a identidade já selecionada. Consultar o
             # span inteiro poderia resolver por um ano ou outro número incidental.
             candidatos = set(u.resolver_por_numero(citacao.numero, con=self.con))
-            candidatos = self._filtrar_ids(citacao, candidatos)
+            candidatos, inconclusivos = self._filtrar_ids(citacao, candidatos)
             caminho = "acordao_fts"
+            if inconclusivos:
+                # O número aparece no cabeçalho, mas o parser não conseguiu
+                # confirmar classe/UF explícitas. Escolher o único ID seria um
+                # falso `real`; descartar seria afirmar que a citação é falsa
+                # sem evidência. Mantemos todos como ambiguidade controlada.
+                possiveis = tuple(sorted(candidatos | inconclusivos))
+                return ResultadoResolucao(
+                    "incompleta", None, "acordao_ambigua", possiveis,
+                    motivo="metadados_nao_verificaveis",
+                )
         if len(candidatos) == 1:
             return ResultadoResolucao("real", next(iter(candidatos)), caminho, tuple(sorted(candidatos)))
         if not candidatos:
@@ -166,7 +176,14 @@ class Resolvedor:
                  or ind._classe_compativel(citacao.classe, classe_registro))
         )
 
-    def _filtrar_ids(self, citacao: CitacaoNormalizada, ids: set[int]) -> set[int]:
+    def _filtrar_ids(self, citacao: CitacaoNormalizada, ids: set[int]) -> tuple[set[int], set[int]]:
+        """Separa candidatos compatíveis dos que não têm metadados verificáveis.
+
+        O segundo conjunto não é tratado como compatível nem descartado: ele
+        impede que o fallback transforme um número real com classe/UF falsa em
+        `real`, sem chamar uma citação correta de `inventada` só porque o OCR do
+        cabeçalho impediu o parser de confirmar seus qualificadores.
+        """
         ausentes = ids - self.metadados_por_id.keys()
         if ausentes:
             placeholders = ",".join("?" for _ in ausentes)
@@ -178,11 +195,23 @@ class Resolvedor:
                     tribunal, campos["classe"] if campos else "",
                     ind.normalizar_uf(campos["uf"]) if campos else None,
                 )
-        return {
-            id_canonico for id_canonico in ids
-            if id_canonico not in self.metadados_por_id
-            or self._compativel(citacao, self.metadados_por_id[id_canonico])
-        }
+        compativeis = set()
+        inconclusivos = set()
+        for id_canonico in ids:
+            metadados = self.metadados_por_id.get(id_canonico)
+            if metadados is None:
+                inconclusivos.add(id_canonico)
+                continue
+            tribunal, classe, uf = metadados
+            if citacao.tribunal and citacao.tribunal != tribunal:
+                continue
+            classe_registro = ind._classe_citada(classe)
+            if (citacao.classe and not classe_registro) or (citacao.uf and not uf):
+                inconclusivos.add(id_canonico)
+                continue
+            if self._compativel(citacao, metadados):
+                compativeis.add(id_canonico)
+        return compativeis, inconclusivos
 
     def lei(self, trecho: str) -> tuple[str, int | None, str]:
         c = normalizar_citacao({"trecho": trecho, "inicio": 0, "fim": len(trecho)}, ROTA_LEI)
