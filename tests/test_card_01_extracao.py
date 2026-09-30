@@ -50,6 +50,38 @@ class OffsetsEQuebrasDeLinha(unittest.TestCase):
         self.assertEqual([item["tipo"] for item in encontrados], ["jurisprudencia", "lei"])
         self.assertLessEqual(encontrados[0]["fim"], encontrados[1]["inicio"])
 
+    def test_numero_de_outra_frase_nao_alonga_citacao_completa(self):
+        texto = "Tema 339/STF. O valor 241.907 foi lançado na estimativa."
+        self.assertEqual(
+            [item["trecho"] for item in candidatos(texto)],
+            ["Tema 339/STF"],
+        )
+
+    def test_barreira_numerica_preserva_abreviacoes_da_citacao(self):
+        casos = (
+            ("Aplica-se o art. 5º da Constituição.", "art. 5º da Constituição"),
+            ("Aplica-se o Tema n. 27.", "Tema n. 27"),
+            ("Conforme a Lei n. 8.078/1990.", "Lei n. 8.078/1990"),
+            (
+                "REsp 1.741.784/PR, rel. Min. Assusete Magalhães.",
+                "REsp 1.741.784/PR, rel. Min. Assusete Magalhães",
+            ),
+        )
+        for texto, esperado in casos:
+            with self.subTest(texto=texto):
+                self.assertEqual(
+                    [item["trecho"] for item in candidatos(texto)],
+                    [esperado],
+                )
+
+    def test_barreira_numerica_preserva_numero_ocr_quebrado_em_linha(self):
+        citacao = "AgInt no R.Esp. n.º l.8O4.\n55O—RS"
+        texto = "Conforme " + citacao + ", manteve-se o acórdão."
+        self.assertEqual(
+            [item["trecho"] for item in candidatos(texto)],
+            [citacao],
+        )
+
     def test_duas_citacoes_na_mesma_frase_nao_sao_fundidas(self):
         texto = "REsp 1.741.784/PR, HC 123456 do STF"
         self.assertEqual(
