@@ -26,6 +26,12 @@ ml = [
     "accelerate>=1,<2",
     "numpy>=1.26,<3",
 ]
+llm = [
+    "torch>=2.2,<3",
+    "transformers>=4.45,<5",
+    "accelerate>=1,<2",
+    "bitsandbytes>=0.43,<1",
+]
 
 [tool.uv]
 package = false

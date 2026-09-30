@@ -10,7 +10,9 @@ __pycache__/
 
 desafio1_bracis.db
 CONTEXTO.md
-data/
+data/*
+!data/sinteticos_desafio/
+!data/sinteticos_desafio/**
 saida/
 
 ex.txt

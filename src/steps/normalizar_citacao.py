@@ -19,7 +19,7 @@ _UF = ind.UF_CITADA
 _ARTIGO = re.compile(r"\bart(?:igo)?\.?\s*(\d[\d.]*)", re.I)
 _LEI_NUMERADA = re.compile(r"\blei\s*(?:n\s*[º°o.]?\s*)?\d[\d.]*(?:/\d{2,4})?", re.I)
 _ANO = re.compile(r"\b(?:19|20)\d{2}\b")
-_VINCULANTE = re.compile(r"vincul", re.I)
+_VINCULANTE = re.compile(r"vincul|\bSV\b(?=\s+\d)", re.I)
 _APELIDOS = carregar_config("diplomas")["apelidos_estatuto"]
 
 

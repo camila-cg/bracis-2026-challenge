@@ -151,6 +151,7 @@ def _metricas_tokens(eval_pred) -> dict[str, float]:
     precisao = tp / (tp + fp) if tp + fp else 0.0
     recall = tp / (tp + fn) if tp + fn else 0.0
     f1 = 2 * precisao * recall / (precisao + recall) if precisao + recall else 0.0
+    f2 = 5 * precisao * recall / (4 * precisao + recall) if precisao + recall else 0.0
     tp_deteccao = int((verdade_positiva & previsto_positivo).sum())
     precisao_deteccao = tp_deteccao / int(previsto_positivo.sum()) if previsto_positivo.any() else 0.0
     recall_deteccao = tp_deteccao / int(verdade_positiva.sum()) if verdade_positiva.any() else 0.0
@@ -158,6 +159,7 @@ def _metricas_tokens(eval_pred) -> dict[str, float]:
         "positive_precision": precisao,
         "positive_recall": recall,
         "positive_f1": f1,
+        "positive_f2": f2,
         "detection_precision": precisao_deteccao,
         "detection_recall": recall_deteccao,
     }
@@ -296,6 +298,9 @@ def treinar(args) -> None:
         peso_maximo=float(config.get("class_weight_max", 10.0)),
     )
     args.saida.mkdir(parents=True, exist_ok=True)
+    metrica_checkpoint = str(config.get("metric_for_best_model", "positive_f1"))
+    if metrica_checkpoint not in {"positive_f1", "positive_f2", "positive_recall"}:
+        raise ValueError("metric_for_best_model deve ser positive_f1, positive_f2 ou positive_recall")
     argumentos = deps["TrainingArguments"](
         output_dir=str(args.saida / "checkpoints"),
         learning_rate=float(config.get("learning_rate", 2e-4)),
@@ -307,7 +312,7 @@ def treinar(args) -> None:
         eval_strategy="epoch" if validacao else "no",
         save_strategy="epoch" if validacao else "no",
         load_best_model_at_end=bool(validacao),
-        metric_for_best_model="positive_f1" if validacao else None,
+        metric_for_best_model=metrica_checkpoint if validacao else None,
         greater_is_better=True if validacao else None,
         seed=seed,
         data_seed=seed,
@@ -360,6 +365,7 @@ def treinar(args) -> None:
         "dataset_sha256": hashlib.sha256((args.dados / "documentos.jsonl").read_bytes()).hexdigest(),
         "temperatura": 1.0,
         "calibracao": "nenhuma",
+        "metrica_selecao_checkpoint": metrica_checkpoint,
         "aumentos_ocr": transformacoes,
         "balanceamento": {
             **amostragem,

@@ -15,6 +15,7 @@ LABELS = ("O", "B-LEI", "I-LEI", "B-JUR", "I-JUR")
 LABEL2ID = {rotulo: indice for indice, rotulo in enumerate(LABELS)}
 ID2LABEL = dict(enumerate(LABELS))
 TipoBIO = Literal["LEI", "JUR"]
+DecisaoVerificador = Literal["CITACAO", "INCERTO", "NAO_CITACAO"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +41,24 @@ class EvidenciaDeteccao:
     iou_regra: float | None = None
     relacao: Literal["concordancia", "discordancia_tipo", "somente_regra", "somente_modelo"] = "somente_regra"
     transformacoes_ocr: tuple[str, ...] = ()
+
+    def como_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass(frozen=True, slots=True)
+class ResultadoVerificacao:
+    """Decisão textual sobre um span já delimitado pelo detector BIO."""
+
+    decisao: DecisaoVerificador
+    confianca: float
+    probabilidades: dict[str, float]
+    modelo: str
+    prompt_sha256: str
+
+    @property
+    def aceita(self) -> bool:
+        return self.decisao == "CITACAO"
 
     def como_dict(self) -> dict:
         return asdict(self)

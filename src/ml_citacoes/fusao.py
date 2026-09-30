@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Protocol, Sequence
 
-from .contratos import CitacaoModelo, EvidenciaDeteccao
+from .contratos import CitacaoModelo, EvidenciaDeteccao, ResultadoVerificacao
+
+
+class VerificadorCandidatos(Protocol):
+    def classificar_muitos(self, trechos: Sequence[str]) -> list[ResultadoVerificacao]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +32,7 @@ def fusionar(
     *,
     limiares: dict[str, float],
     filtro_distrator: Callable[[dict, str], bool],
+    verificador: VerificadorCandidatos | None = None,
     iou_minimo: float = 0.5,
     iou_nms: float = 0.5,
 ) -> ResultadoFusao:
@@ -77,6 +82,8 @@ def fusionar(
             "pontuacao": 0,
             "registros": [],
         }
+        # O verificador substitui decisões semânticas e limiares conservadores,
+        # mas não os filtros estruturais de OAB, folhas, valores e cabeçalho.
         if filtro_distrator(candidato, texto):
             continue
         evidencia = EvidenciaDeteccao(
@@ -86,9 +93,28 @@ def fusionar(
         candidato["evidencia_deteccao"] = evidencia.como_dict()
         somente_modelo.append((pred, candidato))
 
+    if verificador is not None and somente_modelo:
+        verificacoes = verificador.classificar_muitos(
+            [candidato["trecho"] for _, candidato in somente_modelo]
+        )
+        if len(verificacoes) != len(somente_modelo):
+            raise RuntimeError("verificador retornou quantidade inesperada de decisões")
+        aceitos: list[tuple[CitacaoModelo, dict]] = []
+        for (pred, candidato), verificacao in zip(somente_modelo, verificacoes):
+            candidato["evidencia_deteccao"]["verificador"] = verificacao.como_dict()
+            eventos.append(candidato["evidencia_deteccao"] | {
+                "inicio": pred.inicio,
+                "fim": pred.fim,
+                "aceito": verificacao.aceita,
+            })
+            if verificacao.aceita:
+                aceitos.append((pred, candidato))
+        somente_modelo = aceitos
+
     for pred, candidato in _nms(somente_modelo, iou_nms):
         candidatos.append(candidato)
-        eventos.append(candidato["evidencia_deteccao"] | {"inicio": pred.inicio, "fim": pred.fim})
+        if verificador is None:
+            eventos.append(candidato["evidencia_deteccao"] | {"inicio": pred.inicio, "fim": pred.fim})
     candidatos.sort(key=lambda item: (item["inicio"], item["fim"], item["tipo"]))
     return ResultadoFusao(tuple(candidatos), tuple(eventos))
 

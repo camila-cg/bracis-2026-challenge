@@ -7,10 +7,10 @@
     "ag instr", "ag reg", "habeas corpus", "h c", "hc", "rse", "apl", "rms", "rr",
     "arr", "ar", "embargos de declaracao", "ed", "edcl", "eds", "sumula", "sum",
     "sumula vinculante", "tema", "repercussao geral", "processo", "acordao", "julgado",
-    "precedente", "agr", "mandado de seguranca", "apelacao", "apelacao criminal",
+    "precedente", "agr", "mandado de seguranca", "apelacao", "apelacao criminal", "sv",
     "ap crim", "ap criminal"
   ],
-  "marcadores_exatos": ["apelacao"],
+  "marcadores_exatos": ["apelacao", "sv"],
 
   "siglas": ["re", "resp", "aresp", "respe", "rhc", "hc", "rse", "apl", "rms", "rr", "arr", "ar", "rp", "agarr", "rcl", "recl", "agr", "agrg", "agint", "ed", "edcl", "eds"],
   "siglas_classes_ambiguas": {
@@ -30,7 +30,7 @@
     }
   },
   "marcadores_descritivos": ["acordao", "julgado", "precedente", "reclamacao"],
-  "marcadores_numerados": ["sumula", "sum", "sumula vinculante", "tema"],
+  "marcadores_numerados": ["sumula", "sum", "sumula vinculante", "tema", "sv"],
   "classes_citadas": [
     {"padrao": "\\b(?:ARESP|AGRAVO\\s+(?:EM|NO)\\s+RECURSO\\s+ESPECIAL)\\b", "classe": "agravoemrecursoespecial"},
     {"padrao": "\\b(?:RESP|RECURSO\\s+ESPECIAL)\\b", "classe": "recursoespecial"},
