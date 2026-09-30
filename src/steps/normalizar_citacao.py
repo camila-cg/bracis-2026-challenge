@@ -67,7 +67,11 @@ _ENTE_FEDERATIVO = r"(?:municipal|mun\.?|estadual|est\.?|distrital|dist\.?|feder
 # distrital de mesmo número e ano não é o diploma do catálogo.
 _ENTES_NAO_FEDERAIS = {"municipal", "mun", "estadual", "est", "distrital", "dist"}
 _IDENTIDADE_LEI = re.compile(
-    r"\b(?:lei(?:\s+complementar)?|decreto\s*[-–]?\s*lei|lc)"
+    # `decreto-lei` vem antes de `decreto` (a alternância escolhe a primeira que casa).
+    # `res.` exige o ponto, para não casar a palavra comum "res"; a sigla do órgão
+    # emissor (`Res. CNJ nº 455`) é opcional e só vale em maiúsculas.
+    r"\b(?:lei(?:\s+complementar)?|decreto\s*[-–]?\s*lei|decreto|decr\.?|resolu[çc][ãa]o|res\.|lc)"
+    r"(?:\s+(?-i:[A-ZÀ-Ý]{2,8})(?![A-Za-zÀ-ÿ]))?"
     rf"(?:\s+(?P<ente>{_ENTE_FEDERATIVO})(?![A-Za-zÀ-ÿ]))?\s*"
     r"(?:n(?:[uú]mero|[.º°o](?:\s*[º°o.])?)?\s*)?"
     r"(?P<numero>\d(?:[\d.\s]*\d)?)",
@@ -90,6 +94,7 @@ _DATA_NUMERICA = re.compile(
     r")(?![\d./–—-])"
 )
 _VINCULANTE = re.compile(r"vincul|\bSV\b(?=\s+\d)", re.I)
+_ENUNCIADO = re.compile(r"\benunciado\b", re.I)
 _MODIFICADORES_PROCESSUAIS = {
     "AG", "AGR", "AGRG", "AGINT", "ED", "EDCL", "EDS", "EDV",
     "EI", "EDIV", "ERESP", "EARESP", "QO",
@@ -458,6 +463,7 @@ def normalizar_citacao(candidato: dict, familia: Familia, *, ja_normalizado: boo
         lei_nomeada=lei_nomeada,
         contexto_legal_forte=contexto_legal_forte,
         vinculante=bool(_VINCULANTE.search(trecho)) if familia == "sumula" else False,
+        enunciado=bool(_ENUNCIADO.search(trecho)) if familia == "sumula" else False,
         lei_numerada=lei_numerada,
         identificador_suficiente=tem_identificador(trecho),
         identificador_adulterado=identificador_adulterado,

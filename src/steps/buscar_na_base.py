@@ -64,6 +64,14 @@ class Resolvedor:
             if not citacao.numero:
                 return ResultadoResolucao("incompleta", None, "sumula_sem_numero", cobertura="nao_consultada", motivo="numero_ausente")
             tribunal = "STF" if citacao.vinculante else citacao.tribunal
+            if citacao.enunciado and not tribunal:
+                # Enunciados de órgãos que não são tribunais (Fórum Nacional da Infância,
+                # Jornadas de Direito Civil) não estão no catálogo: identificador explícito
+                # sem mapeamento é inventado, como a lei numerada fora do catálogo.
+                return ResultadoResolucao(
+                    "inventada", None, "sumula_inventada", cobertura="fora_base",
+                    motivo="enunciado_sem_mapeamento",
+                )
             if not tribunal:
                 return ResultadoResolucao("incompleta", None, "sumula_sem_tribunal", cobertura="nao_consultada", motivo="tribunal_ausente")
             numero = f"VINCULANTE-{citacao.numero}" if citacao.vinculante else citacao.numero

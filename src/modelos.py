@@ -33,6 +33,7 @@ class CitacaoNormalizada:
     lei_nomeada: bool = False
     contexto_legal_forte: bool = False
     vinculante: bool = False
+    enunciado: bool = False
     lei_numerada: bool = False
     identificador_suficiente: bool = False
     identificador_adulterado: bool = False

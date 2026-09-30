@@ -9,9 +9,10 @@
     "sumula vinculante", "tema", "repercussao geral", "processo", "acordao", "julgado",
     "precedente", "agr", "mandado de seguranca", "apelacao", "apelacao criminal", "sv",
     "ap crim", "ap criminal",
-    "airr", "rrag", "pext", "embargos infringentes"
+    "airr", "rrag", "pext", "embargos infringentes", "enunciado"
   ],
-  "marcadores_exatos": ["apelacao", "sv", "airr", "rrag", "pext"],
+  "marcadores_exatos": ["apelacao", "sv", "airr", "rrag", "pext", "enunciado", "res", "decr", "decreto", "resolucao", "arts", "cf", "cod", "penal-militar",
+    "c l t", "c p c", "c p p", "c p m", "cod de proc penal-militar", "cod de proc penal militar", "cod de proc penal", "cod de proc civil"],
 
   "siglas": ["re", "resp", "aresp", "respe", "rhc", "hc", "rse", "apl", "rms", "rr", "arr", "ar", "rp", "agarr", "rcl", "recl", "agr", "agrg", "agint", "ed", "edcl", "eds", "airr", "rrag"],
   "siglas_classes_ambiguas": {
@@ -37,7 +38,7 @@
     }
   },
   "marcadores_descritivos": ["acordao", "julgado", "precedente", "reclamacao"],
-  "marcadores_numerados": ["sumula", "sum", "sumula vinculante", "tema", "sv"],
+  "marcadores_numerados": ["sumula", "sum", "sumula vinculante", "tema", "sv", "enunciado"],
   "classes_citadas": [
     {"padrao": "\\b(?:ARESP|AGRAVO\\s+(?:EM|NO)\\s+RECURSO\\s+ESPECIAL)\\b", "classe": "agravoemrecursoespecial"},
     {"padrao": "\\b(?:RESP|RECURSO\\s+ESPECIAL)\\b", "classe": "recursoespecial"},

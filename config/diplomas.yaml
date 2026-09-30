@@ -3,22 +3,24 @@
     "art", "artigo", "lei", "lei complementar", "codigo", "constituicao",
     "constituicao federal", "constituicao da republica", "clt", "cpc", "codigo civil",
     "processo civil", "processo penal", "defesa do consumidor", "codigo penal",
-    "penal militar", "codigo eleitoral", "consolidacao das leis do trabalho", "§"
+    "penal militar", "codigo eleitoral", "consolidacao das leis do trabalho", "§",
+    "c l t", "c p c", "c p p", "c p m", "decreto", "decr", "resolucao", "res", "arts", "cf", "cod", "penal-militar",
+    "cod de proc penal-militar", "cod de proc penal militar", "cod de proc penal", "cod de proc civil"
   ],
-  "marcadores_numerados": ["art", "artigo", "§", "lei", "lei complementar"],
+  "marcadores_numerados": ["art", "artigo", "§", "lei", "lei complementar", "arts", "decreto", "decr", "resolucao", "res"],
   "termos_relatoria": ["rel", "relator", "relatora", "relatoria", "min", "ministro", "ministra"],
   "composicao_nome": ["da", "das", "de", "do", "dos", "e"],
   "apelidos_estatuto": {
     "Constituição": [
       "constituição", "constituicao", "constituição federal", "constituicao federal",
-      "constituição da república", "constituicao da republica", "cf/88", "carta magna", "cf/1988"
+      "constituição da república", "constituicao da republica", "cf/88", "carta magna", "cf/1988", "cf,"
     ],
-    "CLT": ["clt", "consolidação das leis do trabalho", "consolidacao das leis do trabalho"],
-    "Código de Processo Civil": ["cpc", "código de processo civil", "codigo de processo civil", "processo civil"],
-    "Código de Processo Penal": ["cpp", "código de processo penal", "codigo de processo penal", "processo penal"],
+    "CLT": ["clt", "c l t", "consolidação das leis do trabalho", "consolidacao das leis do trabalho"],
+    "Código de Processo Civil": ["cpc", "c p c", "código de processo civil", "codigo de processo civil", "processo civil", "cod. de proc. civil"],
+    "Código de Processo Penal": ["cpp", "c p p", "código de processo penal", "codigo de processo penal", "processo penal", "cod. de proc. penal"],
     "Código Penal Militar": [
-      "cpm", "código penal militar", "codigo penal militar", "código de processo penal militar",
-      "codigo de processo penal militar", "processo penal militar", "penal militar"
+      "cpm", "c p m", "código penal militar", "codigo penal militar", "código de processo penal militar",
+      "codigo de processo penal militar", "processo penal militar", "penal militar", "penal-militar", "cod. de proc. penal-militar", "cod. de proc. penal militar"
     ],
     "Código Civil": ["código civil", "codigo civil"],
     "Código de Defesa do Consumidor": ["cdc", "código de defesa do consumidor", "codigo de defesa do consumidor", "defesa do consumidor"],

@@ -7,6 +7,8 @@ correção. As colunas legíveis por máquina dizem o que o pipeline deve produz
 - id_esperado: id_canonico esperado (vazio = não verificar);
 - n_citacoes: quantas citações devem ser detectadas (vazio = não verificar);
 - trecho_contem: texto que o span detectado deve conter (vazio = não verificar);
+- trecho_nao_contem: texto que o span detectado **não** deve conter (vazio = não verificar);
+  pega o span que engole a frase seguinte, que `trecho_contem` não vê;
 - modo_teste: `regressao` (deve passar hoje), `aberto` (problema conhecido, deve
   continuar falhando) ou `pendente` (sem critério definido, não é executado).
 
@@ -29,7 +31,7 @@ from steps.buscar_na_base import Resolvedor
 CASOS = RAIZ / "analise" / "casos_regressao.csv"
 COLUNAS = (
     "exemplo", "resultado esperado", "resultado obtido", "motivo", "status",
-    "classe_esperada", "id_esperado", "n_citacoes", "trecho_contem", "modo_teste",
+    "classe_esperada", "id_esperado", "n_citacoes", "trecho_contem", "trecho_nao_contem", "modo_teste",
 )
 MODOS = {"regressao", "aberto", "pendente"}
 CLASSES = {"", "real", "inventada", "incompleta"}
@@ -65,6 +67,10 @@ def divergencias(caso: dict, citacoes: list[dict]) -> list[str]:
         problemas.append(
             f"span: esperado conter {caso['trecho_contem']!r}, obtido {principal['trecho']!r}"
         )
+    if caso["trecho_nao_contem"] and caso["trecho_nao_contem"] in principal["trecho"]:
+        problemas.append(
+            f"span: não devia conter {caso['trecho_nao_contem']!r}, obtido {principal['trecho']!r}"
+        )
     return problemas
 
 
@@ -88,7 +94,7 @@ class FormatoDoRegistro(unittest.TestCase):
                 if caso["modo_teste"] != "pendente":
                     criterios = (
                         caso["classe_esperada"], caso["id_esperado"],
-                        caso["n_citacoes"], caso["trecho_contem"],
+                        caso["n_citacoes"], caso["trecho_contem"], caso["trecho_nao_contem"],
                     )
                     self.assertTrue(any(criterios), "caso executável sem nenhum critério")
 
