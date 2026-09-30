@@ -60,6 +60,7 @@ def processar_documento(
     resolvedor: Resolvedor,
     detector_bio=None,
     limiares_modelo: dict[str, float] | None = None,
+    verificador_citacoes=None,
 ) -> dict:
     candidatos = extrair(texto)                                        # 1
     candidatos = filtrar_distratores(candidatos, texto)                # 2
@@ -67,12 +68,17 @@ def processar_documento(
     if detector_bio is not None:
         from ml_citacoes.fusao import fusionar
 
+        limiares = limiares_modelo
+        if limiares is None:
+            limiares = ({"LEI": 0.0, "JUR": 0.0} if verificador_citacoes is not None
+                        else {"LEI": 0.95, "JUR": 0.95})
         fusao = fusionar(
             candidatos,
             detector_bio.detectar(texto),
             texto,
-            limiares=limiares_modelo or {"LEI": 0.95, "JUR": 0.95},
+            limiares=limiares,
             filtro_distrator=e_distrator,
+            verificador=verificador_citacoes,
         )
         candidatos = list(fusao.candidatos)
         eventos_deteccao = list(fusao.eventos)
@@ -101,6 +107,7 @@ def processar_documento(
     documento = {"documento_id": documento_id, "citacoes": citacoes}
     if detector_bio is not None:
         documento["eventos_deteccao"] = eventos_deteccao
+        documento["decodificador_bio"] = detector_bio.decodificador
     return documento
 
 
@@ -112,8 +119,18 @@ def main() -> None:
     parser.add_argument("--avaliar", action="store_true", help="pontua contra data/goldenset_offsets.csv")
     parser.add_argument("--goldenset", type=Path, default=DADOS / "goldenset_offsets.csv")
     parser.add_argument("--modelo-citacoes", type=Path, help="artefato LoRA local; omitido mantém regras idênticas")
-    parser.add_argument("--limiar-lei", type=float, default=0.95)
-    parser.add_argument("--limiar-jur", type=float, default=0.95)
+    parser.add_argument("--decodificador-bio", choices=["viterbi", "argmax"], default="viterbi",
+                        help="Viterbi padrão; argmax disponível para comparação histórica")
+    parser.add_argument("--lote-janelas-bio", type=int, default=8)
+    parser.add_argument("--limiar-lei", type=float)
+    parser.add_argument("--limiar-jur", type=float)
+    parser.add_argument("--verificador-llm", type=str,
+                        help="pasta local ou ID do Llama 3.1 8B Instruct quantizado em 4 bits")
+    parser.add_argument("--verificador-ollama", help="modelo local do Ollama, por exemplo llama3.1:8b")
+    parser.add_argument("--endpoint-ollama", default="http://127.0.0.1:11434")
+    parser.add_argument("--revisao-verificador", help="revisão exata obrigatória para ID remoto")
+    parser.add_argument("--permitir-download-verificador", action="store_true")
+    parser.add_argument("--lote-verificador", type=int, default=8)
     args = parser.parse_args()
 
     arquivos = sorted(args.txt.glob("*.txt"))
@@ -125,7 +142,35 @@ def main() -> None:
     if args.modelo_citacoes is not None:
         from ml_citacoes.inferencia import DetectorBIO
 
-        detector_bio = DetectorBIO.de_artefato(args.modelo_citacoes)
+        detector_bio = DetectorBIO.de_artefato(
+            args.modelo_citacoes,
+            decodificador=args.decodificador_bio,
+            lote_janelas=args.lote_janelas_bio,
+        )
+    verificador_citacoes = None
+    if args.verificador_llm is not None and args.verificador_ollama is not None:
+        sys.exit("use somente um backend de verificação")
+    if args.verificador_llm is not None or args.verificador_ollama is not None:
+        if detector_bio is None:
+            sys.exit("o verificador requer --modelo-citacoes")
+        if args.verificador_ollama is not None:
+            from ml_citacoes.verificador_llm import VerificadorOllama
+            verificador_citacoes = VerificadorOllama(
+                modelo=args.verificador_ollama, endpoint=args.endpoint_ollama,
+            )
+        else:
+            from ml_citacoes.verificador_llm import VerificadorLlama
+            verificador_citacoes = VerificadorLlama.de_modelo(
+                args.verificador_llm,
+                revisao=args.revisao_verificador,
+                permitir_download=args.permitir_download_verificador,
+                lote=args.lote_verificador,
+            )
+    if (args.limiar_lei is None) != (args.limiar_jur is None):
+        sys.exit("informe os dois limiares ou omita ambos")
+    limiares_modelo = None if args.limiar_lei is None else {
+        "LEI": args.limiar_lei, "JUR": args.limiar_jur,
+    }
 
     documentos = [
         processar_documento(
@@ -133,7 +178,8 @@ def main() -> None:
             ler_texto(a),
             resolvedor,
             detector_bio,
-            {"LEI": args.limiar_lei, "JUR": args.limiar_jur},
+            limiares_modelo,
+            verificador_citacoes,
         )
         for a in arquivos
     ]  # 1–6

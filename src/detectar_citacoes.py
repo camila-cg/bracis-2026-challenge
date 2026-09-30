@@ -219,6 +219,14 @@ def tem_numero_logo_depois(indice, tokens):
         and len(proximos) >= 2
         and re.search(r"\d", proximos[1]["normalizado"]) is not None)
 
+
+def tem_numero_no_token_seguinte(indice, tokens):
+    """Verdadeiro apenas quando o próximo token já contém um algarismo."""
+    return (
+        indice + 1 < len(tokens)
+        and re.search(r"\d", tokens[indice + 1]["normalizado"]) is not None
+    )
+
 #siglas ambíguas nao viram marcadores principais
 def procurar_classes_processuais_ambiguas(tokens):
     classes = []
@@ -293,6 +301,17 @@ def procurar_marcadores_principais(tokens):
         if marcador_encontrado is None:
             continue
         categoria, marcador, similaridade, fim_indice = marcador_encontrado
+
+        # "SV" é uma abreviação curta e ambígua. Ela só vale como Súmula
+        # Vinculante quando o token contém exatamente essas duas letras,
+        # independentemente da capitalização, e o token seguinte já contém o
+        # número. Não há correspondência aproximada nem correção de OCR.
+        if marcador == "sv" and (
+            fim_indice != indice
+            or tokens[indice]["original"].upper() != "SV"
+            or not tem_numero_no_token_seguinte(indice, tokens)
+        ):
+            continue
 
         intervalo = (indice, fim_indice)
         if intervalo in intervalos_usados:
@@ -547,6 +566,15 @@ def agrupar_registros(texto_original, registros):
 
             novo_marcador_categoria_diferente = (categoria_anterior is not None and categoria_atual is not None and categoria_anterior != categoria_atual)
 
+        # Uma SV numerada é uma fonte autônoma. Se o grupo anterior já tem
+        # número, ela inicia outra citação mesmo na mesma frase (por exemplo,
+        # "Tema 1.076/STJ e SV 37").
+        nova_sv_apos_citacao_numerada = (
+            registro.get("tipo_registro") == "marcador_principal"
+            and registro.get("marcador") == "sv"
+            and grupo_ja_tem_numero
+        )
+
 
         novo_marcador_distante = False
         if registro_inicia_citacao and inicios_citacao_do_grupo:
@@ -556,7 +584,7 @@ def agrupar_registros(texto_original, registros):
             novo_marcador_distante = (distancia_marcadores > _PIPELINE["distancia_marcadores_jurisprudencia"] and registro.get("categoria") == "jurisprudencia")
 
         #outra heurística que talvez precise ser ajustada para generalização
-        if (distancia <= _PIPELINE["distancia_maxima_grupo"] and tamanho_grupo <= _PIPELINE["tamanho_maximo_grupo"] and not novo_marcador_distante and not novo_marcador_categoria_diferente and not limite_entre_citacoes(texto_original, anterior, registro)):
+        if (distancia <= _PIPELINE["distancia_maxima_grupo"] and tamanho_grupo <= _PIPELINE["tamanho_maximo_grupo"] and not novo_marcador_distante and not novo_marcador_categoria_diferente and not nova_sv_apos_citacao_numerada and not limite_entre_citacoes(texto_original, anterior, registro)):
             grupo_atual.append(registro)
         else:
             grupos.append(grupo_atual)

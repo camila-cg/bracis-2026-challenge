@@ -18,7 +18,7 @@ sys.path.insert(0, str(RAIZ / "src"))
 
 from ml_citacoes.aumento import aumentar_citacao_real
 from ml_citacoes.bio import decodificar_viterbi, IGNORAR, bio_para_spans, combinar_logits_janelas, spans_para_bio
-from ml_citacoes.contratos import CitacaoModelo, LABEL2ID
+from ml_citacoes.contratos import CitacaoModelo, LABEL2ID, ResultadoVerificacao
 from ml_citacoes.fusao import fusionar
 from ml_citacoes.metricas import avaliar_spans
 from ml_citacoes.selecionar_modelo import selecionar
@@ -183,6 +183,99 @@ class FusaoConservadora(unittest.TestCase):
         self.assertEqual(len(resultado.candidatos), 1)
         self.assertEqual(resultado.candidatos[0]["evidencia_deteccao"]["origem"], "modelo")
 
+    def test_verificador_recebe_somente_exclusivos_e_incerto_nao_entra(self):
+        class VerificadorFalso:
+            def __init__(self):
+                self.recebidos = None
+
+            def classificar_muitos(self, trechos):
+                self.recebidos = list(trechos)
+                return [
+                    ResultadoVerificacao("CITACAO", .8, {
+                        "CITACAO": .8, "INCERTO": .1, "NAO_CITACAO": .1,
+                    }, "falso", "hash"),
+                    ResultadoVerificacao("INCERTO", .6, {
+                        "CITACAO": .2, "INCERTO": .6, "NAO_CITACAO": .2,
+                    }, "falso", "hash"),
+                ]
+
+        texto = "art. 5º da CF | Tema 1046 | dispositivo legal | OAB/BA 130394"
+        regra = {"tipo": "lei", "inicio": 0, "fim": 13, "trecho": texto[:13]}
+        inicio_tema = texto.index("Tema")
+        inicio_vago = texto.index("dispositivo")
+        inicio_oab = texto.index("OAB")
+        modelo = [
+            CitacaoModelo(0, 13, "LEI", .99),
+            CitacaoModelo(inicio_tema, inicio_tema + len("Tema 1046"), "JUR", .2),
+            CitacaoModelo(inicio_vago, inicio_vago + len("dispositivo legal"), "LEI", .1),
+            CitacaoModelo(inicio_oab, len(texto), "JUR", .9),
+        ]
+        verificador = VerificadorFalso()
+        resultado = fusionar(
+            [regra], modelo, texto,
+            limiares={"LEI": 0.0, "JUR": 0.0},
+            filtro_distrator=lambda candidato, _: "OAB" in candidato["trecho"],
+            verificador=verificador,
+        )
+        self.assertEqual(verificador.recebidos, ["Tema 1046", "dispositivo legal"])
+        self.assertEqual([c["trecho"] for c in resultado.candidatos], [texto[:13], "Tema 1046"])
+        eventos_modelo = [e for e in resultado.eventos if e.get("relacao") == "somente_modelo"]
+        self.assertEqual([e["aceito"] for e in eventos_modelo], [True, False])
+        self.assertEqual(eventos_modelo[1]["verificador"]["decisao"], "INCERTO")
+
+    def test_verificador_com_quantidade_errada_falha_explicitamente(self):
+        class Incompleto:
+            def classificar_muitos(self, trechos):
+                return []
+
+        with self.assertRaisesRegex(RuntimeError, "quantidade inesperada"):
+            fusionar(
+                [], [CitacaoModelo(0, 4, "LEI", .1)], "texto",
+                limiares={"LEI": 0.0, "JUR": 0.0},
+                filtro_distrator=self.nao_distrator,
+                verificador=Incompleto(),
+            )
+
+
+class VerificadorLLM(unittest.TestCase):
+    def test_logits_restritos_geram_decisao_e_confianca(self):
+        from ml_citacoes.verificador_llm import PROMPT_SHA256, PROMPT_VERSAO, _resultado_de_logits
+
+        resultado = _resultado_de_logits([3.0, 1.0, -2.0], modelo="local")
+        self.assertEqual(PROMPT_VERSAO, "zero_shot_v2")
+        self.assertEqual(resultado.decisao, "CITACAO")
+        self.assertEqual(resultado.modelo, "local")
+        self.assertEqual(resultado.prompt_sha256, PROMPT_SHA256)
+        self.assertAlmostEqual(sum(resultado.probabilidades.values()), 1.0)
+        self.assertEqual(resultado.confianca, resultado.probabilidades["CITACAO"])
+
+    def test_empate_e_deterministico_e_logits_invalidos_sao_rejeitados(self):
+        from ml_citacoes.verificador_llm import _resultado_de_logits, _softmax_restrito
+
+        self.assertEqual(_resultado_de_logits([0, 0, 0], modelo="x").decisao, "INCERTO")
+        for valores in ([1, 2], [1, float("nan"), 3]):
+            with self.assertRaises(ValueError):
+                _softmax_restrito(valores)
+
+    def test_resposta_ollama_usa_top_logprobs_das_tres_classes(self):
+        from ml_citacoes.verificador_llm import _resultado_ollama
+
+        resposta = {"logprobs": [{
+            "token": " A", "logprob": -0.1,
+            "top_logprobs": [
+                {"token": " A", "logprob": -0.1},
+                {"token": " B", "logprob": -2.0},
+                {"token": " C", "logprob": -3.0},
+            ],
+        }]}
+        resultado = _resultado_ollama(resposta, modelo="ollama:teste")
+        self.assertEqual(resultado.decisao, "CITACAO")
+        self.assertEqual(resultado.modelo, "ollama:teste")
+        with self.assertRaisesRegex(RuntimeError, "todos os rótulos"):
+            _resultado_ollama({"logprobs": [{
+                "token": " A", "logprob": -0.1, "top_logprobs": [],
+            }]}, modelo="x")
+
 
 class MetricasPorDocumento(unittest.TestCase):
     def test_offsets_iguais_em_documentos_diferentes_nao_casam(self):
@@ -286,6 +379,7 @@ class BalanceamentoTreino(unittest.TestCase):
         self.assertAlmostEqual(metricas["positive_precision"], 1 / 3)
         self.assertEqual(metricas["positive_recall"], 0.5)
         self.assertAlmostEqual(metricas["positive_f1"], 0.4)
+        self.assertAlmostEqual(metricas["positive_f2"], 5 / 11)
         self.assertEqual(metricas["detection_recall"], 1.0)
 
     def test_amostragem_ignora_o_excedente_sem_remover_contexto(self):
@@ -327,10 +421,23 @@ class DecodificacaoRestrita(unittest.TestCase):
     def test_viterbi_pode_rever_token_anterior(self):
         self.assertEqual(decodificar_viterbi([[3, 2, -9, -9, -9], [0, 0, 10, -9, -9]]), [1, 2])
 
-    def test_preserva_entidades_adjacentes_e_curta(self):
+    def test_recompoe_b_consecutivos_do_mesmo_tipo_sem_caractere_entre_offsets(self):
+        # Regressão do caso real: "acórdão" tokenizado como ac|ór|dão e
+        # previsto incorretamente como B-JUR, B-JUR, I-JUR.
+        logits = [[0, 0, 0, 9, 0], [0, 0, 0, 9, 0], [0, 0, 0, 0, 9]]
+        spans, diagnostico = bio_para_spans(
+            decodificar_viterbi(logits), [(0, 2), (2, 4), (4, 7)], [.9, .7, .8]
+        )
+        self.assertEqual([(s.inicio, s.fim, s.score_bruto) for s in spans], [(0, 7, .7)])
+        self.assertEqual(diagnostico.fragmentos, 1)
+
+    def test_preserva_b_consecutivos_separados_por_caractere(self):
         logits = [[0, 9, 0, 0, 0], [0, 9, 0, 0, 0]]
-        spans, _ = bio_para_spans(decodificar_viterbi(logits), [(0, 1), (1, 2)])
-        self.assertEqual([(s.inicio, s.fim) for s in spans], [(0, 1), (1, 2)])
+        spans, diagnostico = bio_para_spans(
+            decodificar_viterbi(logits), [(0, 2), (3, 5)]
+        )
+        self.assertEqual([(s.inicio, s.fim) for s in spans], [(0, 2), (3, 5)])
+        self.assertEqual(diagnostico.fragmentos, 1)
 
     def test_viterbi_depois_da_fusao_de_janelas(self):
         off, labs, scores = combinar_logits_janelas(
@@ -358,20 +465,35 @@ class DecodificacaoRestrita(unittest.TestCase):
         with self.assertRaises(ValueError):
             combinar_logits_janelas([], [], decodificador='errado')
 
-    def test_inferencia_padrao_preservado_e_ocr_unicode(self):
+    def test_inferencia_viterbi_padrao_preserva_argmax_explicito_e_ocr(self):
         from ml_citacoes.inferencia import DetectorBIO
         detector = DetectorBIO(None, None)
         texto = '⚖ Prévia\nREsp 1O50'
         inicio = texto.index('REsp')
         off = [[(inicio, len(texto))]]
         logits = [[[0, 0, 0, 8, 10]]]
-        bruto = detector.decodificar(texto, off, logits)
+        bruto = detector.decodificar(texto, off, logits, decodificador='argmax')
         self.assertEqual(detector.ultimo_diagnostico.invalidas, 1)
-        restrito = detector.decodificar(texto, off, logits, decodificador='viterbi')
+        restrito = detector.decodificar(texto, off, logits)
         self.assertEqual(detector.ultimo_diagnostico.invalidas, 0)
+        self.assertEqual(detector.ultimo_diagnostico_bruto.invalidas, 1)
         self.assertEqual((restrito[0].inicio, restrito[0].fim), (inicio, len(texto)))
         self.assertTrue(restrito[0].transformacoes_ocr)
         self.assertLess(restrito[0].score_bruto, bruto[0].score_bruto)
+
+    def test_detectar_usa_politica_sem_mudar_offsets_ou_requerer_torch(self):
+        from unittest.mock import Mock
+        from ml_citacoes.inferencia import DetectorBIO
+        for modo, esperado in (('argmax', 1), ('viterbi', 0)):
+            detector = DetectorBIO(None, None, decodificador=modo, temperatura=2.0)
+            detector.obter_logits = Mock(return_value=([[(0, 3)]], [[[0, 0, 0, 8, 10]]]))
+            spans = detector.detectar('abc')
+            detector.obter_logits.assert_called_once_with('abc')
+            self.assertEqual(detector.ultimo_diagnostico.invalidas, esperado)
+            self.assertEqual((spans[0].inicio, spans[0].fim, spans[0].tipo), (0, 3, 'JUR'))
+            self.assertIsNotNone(spans[0].score_calibrado)
+        with self.assertRaises(ValueError):
+            DetectorBIO(None, None, decodificador='crf')
 
 
 class ExperimentoPareado(unittest.TestCase):
@@ -384,7 +506,9 @@ class ExperimentoPareado(unittest.TestCase):
             {'documento_id': 'validacao', 'texto': 'Referência inventada', 'nivel': '2', 'origem': 'original',
              'spans': [{'inicio': 0, 'fim': 10, 'tipo': 'lei', 'trecho': 'Referência'}]}]
         self.gravar_dados(dados, docs)
-        (dados / 'folds.json').write_text(json.dumps({'folds': [{'treino': ['treino'], 'validacao': ['validacao']}]}))
+        (dados / 'folds.json').write_text(json.dumps({'folds': [
+            {'fold': 0, 'treino': ['treino'], 'validacao': ['validacao']}
+        ]}))
         manifesto = {'fold': '0', 'documentos_treino': ['treino'], 'documentos_validacao': ['validacao'],
                      'dataset_sha256': hashlib.sha256((dados / 'documentos.jsonl').read_bytes()).hexdigest()}
         (execucao / 'manifesto.json').write_text(json.dumps(manifesto))
@@ -424,7 +548,7 @@ class ExperimentoPareado(unittest.TestCase):
         from ml_citacoes.experimento_bio import validar_entrada
         with tempfile.TemporaryDirectory() as tmp:
             dados, execucao, docs, m = self.preparar(Path(tmp))
-            for campo, valor, mensagem in [('fold', '1', 'somente fold 0'),
+            for campo, valor, mensagem in [('fold', '1', 'fold da execução ausente'),
                                            ('dataset_sha256', 'errado', 'dataset diverge'),
                                            ('documentos_treino', ['validacao'], 'vazamento')]:
                 (execucao/'manifesto.json').write_text(json.dumps({**m, campo: valor}))
@@ -467,6 +591,94 @@ class ExperimentoPareado(unittest.TestCase):
         previsto[0]['documento_id'] = 'a'
         self.assertEqual(_fragmentacao(verdade, previsto)['taxa'], 1)
 
+    def test_experimento_verificador_reporta_funil_sem_trechos_no_resumo(self):
+        from unittest.mock import patch
+        from ml_citacoes.bio import DiagnosticoBIO
+        from ml_citacoes.experimento_verificador import executar
+
+        class Detector:
+            ultimo_diagnostico = DiagnosticoBIO()
+
+            def detectar(self, texto):
+                return [CitacaoModelo(0, 10, 'LEI', .2)]
+
+        class Verificador:
+            def classificar_muitos(self, trechos):
+                return [ResultadoVerificacao('CITACAO', .7, {
+                    'CITACAO': .7, 'INCERTO': .2, 'NAO_CITACAO': .1,
+                }, 'falso', 'hash') for _ in trechos]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            raiz = Path(tmp)
+            dados, execucao, _, _ = self.preparar(raiz)
+            args = SimpleNamespace(dados=dados, execucao=execucao, saida=raiz/'saida')
+            with patch('ml_citacoes.experimento_verificador.extrair', return_value=[]):
+                resultado = executar(args, Detector(), Verificador())
+            self.assertEqual(resultado['verificador']['contagens']['CITACAO'], 1)
+            self.assertEqual(resultado['recall_adicional_aceito_sobre_regras'], 1.0)
+            self.assertEqual(resultado['fp_realmente_acrescentados'], 0)
+            resumo = (args.saida/'resumo.json').read_text()
+            self.assertNotIn('Referência', resumo)
+            detalhes = json.loads((args.saida/'erros_locais.json').read_text())
+            self.assertEqual(detalhes['decisoes_llm'][0]['decisao'], 'CITACAO')
+            self.assertEqual(detalhes['decisoes_llm'][0]['trecho'], 'Referência')
+
+    def test_agregacao_exige_cinco_folds_compativeis_e_reproduzidos(self):
+        from ml_citacoes.agregar_experimento_bio import agregar
+
+        def resumo(fold):
+            metrica = {
+                'geral': {'tp': 10, 'fp': 2, 'fn': 1, 'precisao': .8, 'recall': .9, 'f1': .85},
+                'por_tipo': {
+                    'LEI': {'tp': 2, 'fp': 1, 'fn': 0, 'precisao': .7, 'recall': 1., 'f1': .8},
+                    'JUR': {'tp': 8, 'fp': 1, 'fn': 1, 'precisao': .9, 'recall': .8, 'f1': .85},
+                },
+            }
+            grupo = {'iou_05': metrica, 'exato': metrica}
+            variantes = {}
+            for modo in ('argmax', 'viterbi'):
+                variantes[modo] = {
+                    'bruto': grupo, 'limiar': grupo, 'fusao': grupo,
+                    'diagnostico_bio': {
+                        'transicoes_invalidas': int(modo == 'argmax'),
+                        'documentos_invalidos': int(modo == 'argmax'),
+                        'taxa_documentos_invalidos': .2 if modo == 'argmax' else 0.,
+                    },
+                    'colapso': False,
+                }
+            return {
+                'fold': fold, 'dataset_sha256': 'dados', 'codigo_sha256': {'a': '1'},
+                'regras_config_sha256': {'r': '1'}, 'limiares_fixos': {'LEI': .99, 'JUR': .99},
+                'calibracao': 'nenhuma', 'ocr_definicao': 'nivel2', 'n_documentos': 2,
+                'n_entidades': 11, 'tokens_alterados': fold, 'regras_perfeitas_em_recall': True,
+                'reproducao_argmax': {'documentos_com_spans_diferentes': 0},
+                'variantes': variantes,
+                'delta_viterbi_menos_argmax': {
+                    nome: {k: 0 for k in ('tp', 'fp', 'fn', 'precisao', 'recall', 'f1')}
+                    for nome in ('bruto', 'limiar', 'fusao')
+                },
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            raiz = Path(tmp)
+            caminhos = []
+            for fold in range(5):
+                caminho = raiz / f'{fold}.json'
+                caminho.write_text(json.dumps(resumo(fold)))
+                caminhos.append(caminho)
+            resultado = agregar(caminhos)
+            self.assertEqual(resultado['folds'], [0, 1, 2, 3, 4])
+            self.assertEqual(resultado['tokens_alterados']['total'], 10)
+            self.assertEqual(resultado['variantes']['argmax']['bruto']['iou_05']['totais']['fp'], 10)
+            self.assertEqual(resultado['variantes']['viterbi']['diagnostico_bio']['transicoes_invalidas_total'], 0)
+            with self.assertRaisesRegex(ValueError, 'exatamente cinco'):
+                agregar(caminhos[:4])
+            adulterado = resumo(4)
+            adulterado['codigo_sha256'] = {'a': 'outro'}
+            caminhos[4].write_text(json.dumps(adulterado))
+            with self.assertRaisesRegex(ValueError, 'codigo_sha256 divergente'):
+                agregar(caminhos)
+
 
 class IntegracaoFontePipeline(unittest.TestCase):
     def verificar(self, usar_regra, usar_modelo, fonte):
@@ -476,6 +688,7 @@ class IntegracaoFontePipeline(unittest.TestCase):
         regra = {'tipo': 'lei', 'inicio': 0, 'fim': len(texto), 'trecho': texto}
         detector = Mock() if usar_modelo else None
         if detector is not None:
+            detector.decodificador = 'viterbi'
             detector.detectar.return_value = [CitacaoModelo(0, len(texto), 'LEI', .999)]
         resolvedor = Mock()
         resolvedor.resolver_citacao.return_value = SimpleNamespace(
@@ -487,6 +700,8 @@ class IntegracaoFontePipeline(unittest.TestCase):
             resultado = processar_documento('sintetico', texto, resolvedor, detector)
         self.assertEqual(len(resultado['citacoes']), 1)
         self.assertEqual(resultado['citacoes'][0]['fonte'], fonte)
+        if usar_modelo:
+            self.assertEqual(resultado['decodificador_bio'], 'viterbi')
         self.assertEqual(resolvedor.resolver_citacao.call_args.args[0].fonte, fonte)
         confianca.assert_called_once_with('teste', fonte)
         return resultado

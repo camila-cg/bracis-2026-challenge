@@ -31,6 +31,12 @@ class ExtracaoSemantica(unittest.TestCase):
         self.assertEqual((lei.artigo, lei.diploma), ("373", "Código de Processo Civil"))
         self.assertEqual((sumula.numero, sumula.vinculante), ("10", True))
 
+    def test_sv_exata_normaliza_como_sumula_vinculante_em_qualquer_caixa(self):
+        for sigla in ("SV", "Sv", "sV", "sv"):
+            with self.subTest(sigla=sigla):
+                sumula = citacao(f"{sigla} 37", "sumula")
+                self.assertEqual((sumula.numero, sumula.vinculante), ("37", True))
+
 
 class DecisaoSemantica(unittest.TestCase):
     def setUp(self):

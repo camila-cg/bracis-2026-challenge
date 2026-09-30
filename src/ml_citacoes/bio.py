@@ -54,7 +54,13 @@ def bio_para_spans(
     offsets: Sequence[Sequence[int]],
     scores: Sequence[float] | None = None,
 ) -> tuple[list[CitacaoModelo], DiagnosticoBIO]:
-    """Reconstrói spans sem busca textual; I inválido inicia span e é contabilizado."""
+    """Reconstrói spans sem busca textual; I inválido inicia span e é contabilizado.
+
+    Dois ``B`` consecutivos do mesmo tipo são recompostos quando os offsets se
+    tocam. Isso corrige fronteiras criadas entre WordPieces da mesma palavra
+    (por exemplo, ``ac|ór|dão``), sem unir entidades separadas por qualquer
+    caractere do texto.
+    """
     spans: list[CitacaoModelo] = []
     atual: dict | None = None
     invalidas = 0
@@ -71,10 +77,14 @@ def bio_para_spans(
                 atual = None
             continue
         prefixo, tipo = rotulo.split("-", 1)
-        continua = atual is not None and atual["tipo"] == tipo and prefixo == "I"
+        mesmo_tipo = atual is not None and atual["tipo"] == tipo
+        recompoe_subtoken = (
+            mesmo_tipo and prefixo == "B" and atual["fim"] == inicio
+        )
+        continua = mesmo_tipo and (prefixo == "I" or recompoe_subtoken)
         if prefixo == "I" and not continua:
             invalidas += 1
-        if prefixo == "B" and atual is not None and atual["tipo"] == tipo:
+        if prefixo == "B" and mesmo_tipo:
             fragmentos += 1
         if not continua:
             if atual is not None:

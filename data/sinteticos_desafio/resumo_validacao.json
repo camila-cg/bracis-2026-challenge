@@ -1,0 +1,34 @@
+{
+  "resumo": {
+    "documentos": 8,
+    "citacoes_total": 16,
+    "citacoes_LEI": 7,
+    "citacoes_JUR": 9,
+    "documentos_positivos": 1,
+    "documentos_negativos": 2,
+    "documentos_mistos": 5,
+    "distratores": 33,
+    "categorias_dificuldade": {
+      "abreviação jurídica rara": 7,
+      "citação curta identificável": 7,
+      "citação descritiva individualizável": 1,
+      "citação dividida por quebra de linha": 3,
+      "múltiplas citações próximas": 7,
+      "número normativo parcialmente degradado": 1,
+      "número processual parcialmente degradado": 1,
+      "pontuação incomum": 5,
+      "ruído plausível de OCR": 4
+    }
+  },
+  "verificacoes": {
+    "offsets_unicode_fim_exclusivo": "OK",
+    "igualdade_texto_inicio_fim_trecho": "OK",
+    "sobreposicao_spans": "OK",
+    "ids_duplicados_internos": [],
+    "colisoes_com_ids_preexistentes": [],
+    "prefixo_ids": "OK",
+    "origem": "OK",
+    "erros_offsets": [],
+    "erros_sobreposicao": []
+  }
+}

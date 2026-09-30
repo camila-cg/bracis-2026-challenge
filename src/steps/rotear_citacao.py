@@ -12,7 +12,10 @@ ROTA_TEMA = "tema"
 ROTA_DESCRITIVA = "descritiva"  # tribunal/classe + ano + relator, sem número
 ROTA_ACORDAO = "acordao"
 
-E_SUMULA = re.compile(r"\b(?:[s5$][uúü][mn]|verbete)", re.I)
+E_SUMULA = re.compile(
+    r"\b(?:[s5$][uúü][mn]|verbete|SV(?=\s+\d))",
+    re.I,
+)
 E_TEMA = re.compile(r"\bt[eê]m[aã]\b", re.I)
 
 

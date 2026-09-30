@@ -14,6 +14,7 @@ sys.path.insert(0, str(RAIZ / "src"))
 import detectar_citacoes as detector
 from steps.extrair_candidatos import extrair
 from steps.filtrar_distratores import analisar_contexto, e_distrator, filtrar_distratores, motivo_distrator
+from steps.rotear_citacao import rotear
 
 
 def candidatos(texto):
@@ -88,6 +89,22 @@ class TiposDeCitacao(unittest.TestCase):
             with self.subTest(trecho=trecho):
                 encontrados = candidatos("Aplica-se a " + trecho + ".")
                 self.assertTrue(any(item["tipo"] == "jurisprudencia" for item in encontrados))
+
+    def test_sv_exata_sem_aproximacao_aceita_qualquer_caixa(self):
+        for sigla in ("SV", "Sv", "sV", "sv"):
+            with self.subTest(sigla=sigla):
+                texto = f"Aplicam-se o Tema 1.076/STJ e a {sigla} 37."
+                encontrados = candidatos(texto)
+                self.assertEqual(
+                    [item["trecho"] for item in encontrados],
+                    ["Tema 1.076/STJ", f"{sigla} 37"],
+                )
+                self.assertEqual(rotear(encontrados[1]), "sumula")
+
+    def test_sv_exige_token_exato_e_numero_no_token_seguinte(self):
+        for trecho in ("SV", "SV do STF", "SV nº 37", "S V 37", "SVX 37", "5V 37"):
+            with self.subTest(trecho=trecho):
+                self.assertEqual(candidatos("Aplicou-se " + trecho + "."), [])
 
     def test_lei_artigo_e_paragrafo(self):
         for trecho in ("Lei 8.078/1990", "art. 373 do CPC", "artigo 5º da Constituição", "§ 1º do art. 489 do CPC"):

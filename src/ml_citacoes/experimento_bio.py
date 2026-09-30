@@ -1,4 +1,4 @@
-"""Ablação pareada de decodificação, exclusivamente no fold 0 já treinado.
+"""Ablação pareada de decodificação em um fold já treinado.
 
 Não treina, não busca limiar, não calibra, não consulta o conjunto final.
 Relatório detalhado fica local; resumo não contém texto, IDs ou offsets.
@@ -26,8 +26,10 @@ def _hash(path):
 
 def validar_entrada(dados, execucao):
     manifesto = json.loads((execucao / 'manifesto.json').read_text(encoding='utf-8'))
-    if str(manifesto['fold']) != '0':
-        raise ValueError('este smoke test aceita somente fold 0')
+    try:
+        indice_fold = int(manifesto['fold'])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError('execução sem número de fold válido') from exc
     if _hash(dados / 'documentos.jsonl') != manifesto['dataset_sha256']:
         raise ValueError('dataset diverge do usado no treinamento')
     docs = [json.loads(l) for l in (dados / 'documentos.jsonl').read_text(encoding='utf-8').splitlines() if l.strip()]
@@ -40,7 +42,13 @@ def validar_entrada(dados, execucao):
     if not (treino | validacao) <= por_id.keys():
         raise ValueError('documentos ausentes')
     folds = json.loads((dados / 'folds.json').read_text(encoding='utf-8'))
-    fold = folds['folds'][0]
+    candidatos_fold = [
+        item for indice, item in enumerate(folds['folds'])
+        if int(item.get('fold', indice)) == indice_fold
+    ]
+    if len(candidatos_fold) != 1:
+        raise ValueError('fold da execução ausente ou duplicado no manifesto de folds')
+    fold = candidatos_fold[0]
     if set(fold['treino']) != treino or set(fold['validacao']) != validacao:
         raise ValueError('manifestos de execução e de folds divergem')
     hashes_treino = {hashlib.sha256(por_id[i]['texto'].encode()).hexdigest() for i in treino}
@@ -57,7 +65,7 @@ def validar_entrada(dados, execucao):
             if 'trecho' in s and doc['texto'][s['inicio']:s['fim']] != s['trecho']:
                 raise ValueError('trecho diverge dos offsets')
             anterior = s['fim']
-    return manifesto, {i: por_id[i] for i in sorted(validacao)}
+    return manifesto, indice_fold, {i: por_id[i] for i in sorted(validacao)}
 
 
 def _tipo(s):
@@ -101,7 +109,7 @@ def _faixas_score(verdade, previsto, docs):
 
 
 def executar(args, detector=None):
-    manifesto, docs = validar_entrada(args.dados, args.execucao)
+    manifesto, indice_fold, docs = validar_entrada(args.dados, args.execucao)
     if args.saida.exists():
         raise ValueError('saída já existe; use uma nova pasta para preservar a ablação')
     limiares = {'LEI': args.limiar_lei, 'JUR': args.limiar_jur}
@@ -147,7 +155,7 @@ def executar(args, detector=None):
             d['tokens_positivos'] += sum(x != 0 for x in labels)
     regras_m = _metricas(verdade, regras, docs)
     erros_regras = _detalhar_erros(verdade, regras, docs)
-    resultado = {'protocolo': 'exp01_bio_fold0_pareado', 'fold': 0,
+    resultado = {'protocolo': 'exp01_bio_pareado', 'fold': indice_fold,
                  'avaliacao_independente': False, 'motivo': 'fold já usado para escolher checkpoint e inspecionar erros',
                  'n_documentos': len(docs), 'n_entidades': len(verdade), 'limiares_fixos': limiares,
                  'calibracao': 'nenhuma; mínimo do softmax local do rótulo escolhido',

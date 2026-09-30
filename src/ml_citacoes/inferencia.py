@@ -12,16 +12,29 @@ from .contratos import CitacaoModelo
 class DetectorBIO:
     """Adaptador opcional. Dependências pesadas são importadas apenas ao ativá-lo."""
 
-    def __init__(self, tokenizer, modelo, *, max_length: int = 512, stride: int = 96, temperatura: float = 1.0):
+    def __init__(self, tokenizer, modelo, *, max_length: int = 512, stride: int = 96,
+                 temperatura: float = 1.0, decodificador: str = "viterbi",
+                 lote_janelas: int = 8):
+        if decodificador not in {"argmax", "viterbi"}:
+            raise ValueError("decodificador deve ser argmax ou viterbi")
+        if lote_janelas < 1:
+            raise ValueError("lote_janelas deve ser positivo")
         self.tokenizer = tokenizer
         self.modelo = modelo
         self.max_length = max_length
         self.stride = stride
         self.temperatura = temperatura
+        self.decodificador = decodificador
+        self.lote_janelas = lote_janelas
         self.ultimo_diagnostico = None
+        self.ultimo_diagnostico_bruto = None
 
     @classmethod
-    def de_artefato(cls, pasta: Path, *, permitir_download: bool = False) -> "DetectorBIO":
+    def de_artefato(cls, pasta: Path, *, permitir_download: bool = False,
+                   decodificador: str = "viterbi", lote_janelas: int = 8) -> "DetectorBIO":
+        # Política de inferência explícita; não reescreve pesos/manifestos históricos.
+        if decodificador not in {"argmax", "viterbi"}:
+            raise ValueError("decodificador deve ser argmax ou viterbi")
         try:
             import torch
             from peft import PeftModel
@@ -58,6 +71,8 @@ class DetectorBIO:
             max_length=int(manifesto.get("max_length", 512)),
             stride=int(manifesto.get("stride", 96)),
             temperatura=float(manifesto.get("temperatura", 1.0)),
+            decodificador=decodificador,
+            lote_janelas=lote_janelas,
         )
 
     def detectar(self, texto: str) -> list[CitacaoModelo]:
@@ -83,13 +98,23 @@ class DetectorBIO:
         offsets = lote.pop("offset_mapping").tolist()
         lote.pop("overflow_to_sample_mapping", None)
         dispositivo = next(self.modelo.parameters()).device
-        entradas = {chave: valor.to(dispositivo) for chave, valor in lote.items()}
-        with torch.no_grad():
-            logits = self.modelo(**entradas).logits.detach().cpu().tolist()
+        logits = []
+        total_janelas = len(offsets)
+        with torch.inference_mode():
+            for inicio in range(0, total_janelas, self.lote_janelas):
+                fim = inicio + self.lote_janelas
+                entradas = {
+                    chave: valor[inicio:fim].to(dispositivo)
+                    for chave, valor in lote.items()
+                }
+                logits.extend(self.modelo(**entradas).logits.detach().cpu().tolist())
         return offsets, logits
 
-    def decodificar(self, texto: str, offsets, logits, *, decodificador: str = "argmax"):
-        """Opção experimental explícita; o pipeline continua usando argmax."""
+    def decodificar(self, texto: str, offsets, logits, *, decodificador: str | None = None):
+        """Viterbi por padrão; argmax explícito preserva a comparação histórica."""
+        decodificador = self.decodificador if decodificador is None else decodificador
+        off_bruto, lab_bruto, score_bruto = combinar_logits_janelas(offsets, logits, decodificador="argmax")
+        _, self.ultimo_diagnostico_bruto = bio_para_spans(lab_bruto, off_bruto, score_bruto)
         offsets_unicos, labels, scores = combinar_logits_janelas(offsets, logits, decodificador=decodificador)
         spans, diagnostico = bio_para_spans(labels, offsets_unicos, scores)
         calibrados = {}
