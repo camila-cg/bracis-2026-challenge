@@ -339,7 +339,7 @@ def _compativel(trecho: str, tribunal: str, classe: str, uf: str | None) -> bool
         return False
     classe_citada = _classe_citada(trecho)
     classe_registro = _classe_citada(classe)
-    if classe_citada and classe_registro and not classes_compativeis(classe_citada, classe_registro):
+    if classe_citada and classe_registro and not _classe_compativel(classe_citada, classe_registro):
         return False
     return True
 
