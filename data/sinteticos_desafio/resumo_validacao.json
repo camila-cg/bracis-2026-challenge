@@ -10,14 +10,14 @@
     "distratores": 33,
     "categorias_dificuldade": {
       "abreviação jurídica rara": 7,
-      "citação curta identificável": 7,
+      "citação curta identificável": 8,
       "citação descritiva individualizável": 1,
       "citação dividida por quebra de linha": 3,
       "múltiplas citações próximas": 7,
       "número normativo parcialmente degradado": 1,
-      "número processual parcialmente degradado": 1,
+      "número processual em formato CNJ": 1,
       "pontuação incomum": 5,
-      "ruído plausível de OCR": 4
+      "ruído plausível de OCR": 3
     }
   },
   "verificacoes": {

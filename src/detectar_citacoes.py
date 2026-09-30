@@ -227,6 +227,38 @@ def tem_numero_no_token_seguinte(indice, tokens):
         and re.search(r"\d", tokens[indice + 1]["normalizado"]) is not None
     )
 
+
+_INDICADORES_NUMERO_TEMA = ((), ("n",), ("nº",), ("n°",), ("no",), ("numero",))
+_QUALIFICADORES_TEMA = (
+    (),
+    ("repetitivo",),
+    ("de", "repercussao", "geral"),
+    ("da", "repercussao", "geral"),
+)
+
+
+def tema_tem_identificador_juridico(indice, tokens):
+    """Exige número após conectores próprios de um Tema jurisprudencial.
+
+    A proximidade genérica não basta: em ``Tema em debate: 27``, por
+    exemplo, 27 numera um assunto, não um precedente. Os padrões aceitos
+    preservam as formas usuais ``Tema 27``, ``Tema nº 27``,
+    ``Tema repetitivo 27`` e ``Tema de repercussão geral nº 27``.
+    """
+    posteriores = [token["normalizado"] for token in tokens[indice + 1:]]
+    for qualificador in _QUALIFICADORES_TEMA:
+        for indicador in _INDICADORES_NUMERO_TEMA:
+            prefixo = qualificador + indicador
+            if posteriores[:len(prefixo)] != list(prefixo):
+                continue
+            posicao_numero = len(prefixo)
+            if (
+                posicao_numero < len(posteriores)
+                and re.search(r"\d", posteriores[posicao_numero]) is not None
+            ):
+                return True
+    return False
+
 #siglas ambíguas nao viram marcadores principais
 def procurar_classes_processuais_ambiguas(tokens):
     classes = []
@@ -327,6 +359,14 @@ def procurar_marcadores_principais(tokens):
             fim_indice != indice
             or tokens[indice]["original"].upper() != "SV"
             or not tem_numero_no_token_seguinte(indice, tokens)
+        ):
+            continue
+
+        # "Tema" também ocorre como substantivo comum. Um número apenas
+        # próximo não o transforma em precedente; ele precisa aparecer logo
+        # após o marcador ou após conectores jurídicos conhecidos.
+        if marcador == "tema" and not tema_tem_identificador_juridico(
+            fim_indice, tokens
         ):
             continue
 
