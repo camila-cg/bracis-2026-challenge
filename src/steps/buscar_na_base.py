@@ -28,6 +28,16 @@ class Resolvedor:
     def resolver_citacao(self, citacao: CitacaoNormalizada) -> ResultadoResolucao:
         """Decide a classificação a partir dos atributos extraídos."""
         if citacao.familia == ROTA_LEI:
+            if not citacao.artigo:
+                # Sem artigo a citação não individualiza um dispositivo da
+                # base, esteja a lei no catálogo ou não: é evasiva, não
+                # alucinação. Só um número de lei zerado é inválido por si.
+                if citacao.numero_lei and not citacao.numero_lei.strip("0"):
+                    return ResultadoResolucao(
+                        "inventada", None, "lei_inventada", cobertura="fora_base",
+                        motivo="numero_zero",
+                    )
+                return ResultadoResolucao("incompleta", None, "lei_sem_artigo", cobertura="nao_consultada", motivo="artigo_ausente")
             if citacao.identidade_legal_valida is False:
                 return ResultadoResolucao(
                     "inventada", None, "lei_inventada", cobertura="fora_base",
@@ -38,8 +48,6 @@ class Resolvedor:
                     "inventada", None, "lei_inventada", cobertura="fora_base",
                     motivo="diploma_nomeado_sem_mapeamento",
                 )
-            if not citacao.artigo:
-                return ResultadoResolucao("incompleta", None, "lei_sem_artigo", cobertura="nao_consultada", motivo="artigo_ausente")
             if not citacao.diploma:
                 if citacao.lei_numerada:
                     # Convenção do desafio: lei numerada fora do catálogo congelado.

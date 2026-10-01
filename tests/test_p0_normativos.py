@@ -198,11 +198,19 @@ class IdentidadeLegalEstruturada(unittest.TestCase):
                 self.assertEqual(citacao.artigo, "818")
                 self.assertEqual(self.resolvedor.resolver_citacao(citacao).id_canonico, 13)
 
-    def test_lei_numerada_desconhecida_ou_zero_e_inventada_sem_artigo(self):
-        for trecho in ("Lei 12345", "Lei 000000000000000000000000000000000"):
+    def test_lei_numerada_desconhecida_sem_artigo_e_incompleta(self):
+        # Sem artigo nenhuma lei individualiza um dispositivo da base, esteja
+        # ou não no catálogo: a citação é evasiva, não inventada.
+        for trecho in ("Lei 12345", "Lei nº 13.146/2015", "Lei 13.105/2016"):
             with self.subTest(trecho=trecho):
                 resultado = self.resolver(trecho)
-                self.assertEqual((resultado.classe, resultado.caminho), ("inventada", "lei_inventada"))
+                self.assertEqual((resultado.classe, resultado.caminho), ("incompleta", "lei_sem_artigo"))
+
+    def test_lei_zerada_sem_artigo_continua_inventada(self):
+        for trecho in ("Lei 000000000000000000000000000000000", "Lei nº 0/2020"):
+            with self.subTest(trecho=trecho):
+                resultado = self.resolver(trecho)
+                self.assertEqual((resultado.classe, resultado.motivo), ("inventada", "numero_zero"))
 
     def test_lei_canonica_sem_artigo_continua_incompleta(self):
         resultado = self.resolver("Lei 13.105/2015")

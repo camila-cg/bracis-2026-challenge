@@ -98,6 +98,9 @@ registros compatíveis resulta em `inventada`; um resulta em `real`; vários ou
 identificadores insuficientes resultam em `incompleta`. Para temas e leis
 numeradas sem mapeamento, a convenção atual do desafio é preservada e a
 cobertura fica marcada como `fora_base` no JSON de diagnóstico.
+Lei, decreto ou resolução citados sem artigo resultam em `incompleta`, estejam
+ou não no catálogo, porque a base registra dispositivos e não diplomas inteiros;
+só um número de ato zerado continua `inventada`.
 
 ### Filtro contextual de metadados
 
