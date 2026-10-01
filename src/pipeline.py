@@ -27,8 +27,11 @@ Nota: Nada aqui olha o gabarito: --avaliar só lê o goldenset depois que as pre
 from __future__ import annotations
 
 import argparse
+import json
 import sqlite3
 import sys
+import traceback
+from datetime import datetime
 from pathlib import Path
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -54,6 +57,64 @@ def ler_texto(arquivo: Path) -> str:
     return bruto.decode("utf-8")
 
 
+def _registrar_erro(
+    erros: list[dict],
+    documento_id: str,
+    etapa: str,
+    exc: Exception,
+    acao: str,
+    *,
+    arquivo: Path | None = None,
+    contexto: dict | None = None,
+) -> None:
+    """Acumula uma falha recuperável sem incluir o conteúdo do documento."""
+    registro = {
+        "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "documento_id": documento_id,
+        "etapa": etapa,
+        "tipo_erro": type(exc).__name__,
+        "mensagem": str(exc),
+        "acao": acao,
+        "traceback": "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
+    }
+    if arquivo is not None:
+        registro["arquivo"] = arquivo.name
+    if contexto:
+        registro["contexto"] = contexto
+    erros.append(registro)
+
+
+def _resumir_candidato(candidato) -> dict:
+    """Expõe apenas metadados seguros do candidato no log de erro."""
+    if not isinstance(candidato, dict):
+        return {"tipo_objeto": type(candidato).__name__}
+    resumo = {}
+    for chave in ("inicio", "fim", "tipo", "fonte"):
+        if chave not in candidato:
+            continue
+        valor = candidato.get(chave)
+        resumo[chave] = (
+            valor
+            if isinstance(valor, (str, int, float, bool)) or valor is None
+            else type(valor).__name__
+        )
+    return resumo
+
+
+def gravar_log_erros(
+    erros: list[dict], pasta: Path, momento: datetime | None = None
+) -> Path | None:
+    """Grava um JSONL por execução; ausência de erros não cria arquivo vazio."""
+    if not erros:
+        return None
+    momento = momento or datetime.now()
+    pasta.mkdir(parents=True, exist_ok=True)
+    caminho = pasta / f"erros_pipeline_{momento:%Y-%m-%d_%H-%M-%S_%f}.jsonl"
+    conteudo = "".join(json.dumps(erro, ensure_ascii=False) + "\n" for erro in erros)
+    caminho.write_text(conteudo, encoding="utf-8")
+    return caminho
+
+
 def processar_documento(
     documento_id: str,
     texto: str,
@@ -62,6 +123,7 @@ def processar_documento(
     limiares_modelo: dict[str, float] | None = None,
     verificador_citacoes=None,
     debug_extracao: list[dict] | None = None,
+    erros_processamento: list[dict] | None = None,
 ) -> dict:
     candidatos = extrair(texto)                                        # 1
     if debug_extracao is not None:
@@ -69,61 +131,138 @@ def processar_documento(
                                "candidatos": list(candidatos)})
     candidatos = filtrar_distratores(candidatos, texto)                # 2
     eventos_deteccao = []
+    detector_executado = False
     if detector_bio is not None:
-        from ml_citacoes.fusao import fusionar
+        try:
+            from ml_citacoes.fusao import fusionar
 
-        limiares = limiares_modelo
-        if limiares is None:
-            limiares = ({"LEI": 0.0, "JUR": 0.0} if verificador_citacoes is not None
-                        else {"LEI": 0.95, "JUR": 0.95})
-        fusao = fusionar(
-            candidatos,
-            detector_bio.detectar(texto),
-            texto,
-            limiares=limiares,
-            filtro_distrator=e_distrator,
-            verificador=verificador_citacoes,
-        )
-        candidatos = list(fusao.candidatos)
-        eventos_deteccao = list(fusao.eventos)
+            limiares = limiares_modelo
+            if limiares is None:
+                limiares = ({"LEI": 0.0, "JUR": 0.0} if verificador_citacoes is not None
+                            else {"LEI": 0.95, "JUR": 0.95})
+            fusao = fusionar(
+                candidatos,
+                detector_bio.detectar(texto),
+                texto,
+                limiares=limiares,
+                filtro_distrator=e_distrator,
+                verificador=verificador_citacoes,
+            )
+            candidatos = list(fusao.candidatos)
+            eventos_deteccao = list(fusao.eventos)
+            detector_executado = True
+        except Exception as exc:
+            if erros_processamento is None:
+                raise
+            _registrar_erro(
+                erros_processamento,
+                documento_id,
+                "deteccao_modelo",
+                exc,
+                "fallback_para_regras",
+            )
     citacoes = []
     for candidato in candidatos:
-        rota = rotear(candidato)                                       # 3
-        # O detector mantém o span enxuto para a métrica, mas um qualificador
-        # contraditório pode estar imediatamente fora dele (``do TJSP``). A
-        # normalização recebe apenas pequenas janelas de contexto; os offsets e
-        # o trecho devolvidos continuam sendo os do candidato original.
-        candidato_normalizacao = dict(candidato)
-        candidato_normalizacao["_contexto_esquerda"] = texto[
-            max(0, candidato["inicio"] - 48):candidato["inicio"]
-        ]
-        candidato_normalizacao["_contexto_direita"] = texto[
-            candidato["fim"]:min(len(texto), candidato["fim"] + 48)
-        ]
-        citacao = normalizar_citacao(candidato_normalizacao, rota)      # 4
-        resultado = resolvedor.resolver_citacao(citacao)               # 5
-        confianca = atribuir_confianca(resultado.caminho, citacao.fonte)  # 6
-        saida = {
-            "inicio": candidato["inicio"],
-            "fim": candidato["fim"],
-            "trecho": candidato["trecho"],
-            "tipo": candidato["tipo"],
-            "classificacao": resultado.classe,
-            "resolucao": {"id_canonico": str(resultado.id_canonico)} if resultado.id_canonico is not None else None,
-            "confianca": confianca,
-            "caminho": resultado.caminho,
-            "cobertura": resultado.cobertura,
-            "motivo": resultado.motivo,
-            "fonte": citacao.fonte,
-        }
-        if "evidencia_deteccao" in candidato:
-            saida["evidencia_deteccao"] = candidato["evidencia_deteccao"]
-        citacoes.append(saida)
+        etapa = "roteamento"
+        try:
+            rota = rotear(candidato)                                   # 3
+            # O detector mantém o span enxuto para a métrica, mas um qualificador
+            # contraditório pode estar imediatamente fora dele (``do TJSP``). A
+            # normalização recebe apenas pequenas janelas de contexto; os offsets e
+            # o trecho devolvidos continuam sendo os do candidato original.
+            candidato_normalizacao = dict(candidato)
+            candidato_normalizacao["_contexto_esquerda"] = texto[
+                max(0, candidato["inicio"] - 48):candidato["inicio"]
+            ]
+            candidato_normalizacao["_contexto_direita"] = texto[
+                candidato["fim"]:min(len(texto), candidato["fim"] + 48)
+            ]
+            etapa = "normalizacao"
+            citacao = normalizar_citacao(candidato_normalizacao, rota)  # 4
+            etapa = "resolucao"
+            resultado = resolvedor.resolver_citacao(citacao)           # 5
+            etapa = "confianca"
+            confianca = atribuir_confianca(resultado.caminho, citacao.fonte)  # 6
+            saida = {
+                "inicio": candidato["inicio"],
+                "fim": candidato["fim"],
+                "trecho": candidato["trecho"],
+                "tipo": candidato["tipo"],
+                "classificacao": resultado.classe,
+                "resolucao": {"id_canonico": str(resultado.id_canonico)} if resultado.id_canonico is not None else None,
+                "confianca": confianca,
+                "caminho": resultado.caminho,
+                "cobertura": resultado.cobertura,
+                "motivo": resultado.motivo,
+                "fonte": citacao.fonte,
+            }
+            if "evidencia_deteccao" in candidato:
+                saida["evidencia_deteccao"] = candidato["evidencia_deteccao"]
+            citacoes.append(saida)
+        except Exception as exc:
+            if erros_processamento is None:
+                raise
+            _registrar_erro(
+                erros_processamento,
+                documento_id,
+                etapa,
+                exc,
+                "citacao_descartada",
+                contexto=_resumir_candidato(candidato),
+            )
     documento = {"documento_id": documento_id, "citacoes": citacoes}
-    if detector_bio is not None:
+    if detector_executado:
         documento["eventos_deteccao"] = eventos_deteccao
         documento["decodificador_bio"] = detector_bio.decodificador
     return documento
+
+
+def processar_arquivo(
+    arquivo: Path,
+    resolvedor: Resolvedor,
+    *,
+    detector_bio=None,
+    limiares_modelo: dict[str, float] | None = None,
+    verificador_citacoes=None,
+    debug_extracao: list[dict] | None = None,
+    erros_processamento: list[dict],
+) -> dict:
+    """Processa um arquivo sem permitir que sua falha interrompa o lote."""
+    documento_id = arquivo.stem
+    try:
+        texto = ler_texto(arquivo)
+    except Exception as exc:
+        _registrar_erro(
+            erros_processamento,
+            documento_id,
+            "leitura",
+            exc,
+            "documento_emitido_sem_citacoes",
+            arquivo=arquivo,
+        )
+        return {"documento_id": documento_id, "citacoes": []}
+
+    try:
+        return processar_documento(
+            documento_id,
+            texto,
+            resolvedor,
+            detector_bio,
+            limiares_modelo,
+            verificador_citacoes,
+            debug_extracao,
+            erros_processamento,
+        )
+    except Exception as exc:
+        _registrar_erro(
+            erros_processamento,
+            documento_id,
+            "processamento_documento",
+            exc,
+            "documento_emitido_sem_citacoes",
+            arquivo=arquivo,
+        )
+        return {"documento_id": documento_id, "citacoes": []}
 
 
 def main() -> None:
@@ -131,6 +270,7 @@ def main() -> None:
     parser.add_argument("--txt", type=Path, default=DADOS / "txt")
     parser.add_argument("--db", type=Path, default=DADOS / "desafio1_bracis.db")
     parser.add_argument("--saida", type=Path, default=RAIZ / "saida")
+    parser.add_argument("--logs", type=Path, default=RAIZ / "logs")
     parser.add_argument("--avaliar", action="store_true", help="pontua contra data/goldenset_offsets.csv")
     parser.add_argument("--goldenset", type=Path, default=DADOS / "goldenset_offsets.csv")
     parser.add_argument("--modelo-citacoes", type=Path, help="artefato LoRA local; omitido mantém regras idênticas")
@@ -191,18 +331,26 @@ def main() -> None:
     }
 
     debug_extracao: list[dict] = []
+    erros_processamento: list[dict] = []
     documentos = [
-        processar_documento(
-            a.stem,
-            ler_texto(a),
+        processar_arquivo(
+            a,
             resolvedor,
-            detector_bio,
-            limiares_modelo,
-            verificador_citacoes,
-            debug_extracao,
+            detector_bio=detector_bio,
+            limiares_modelo=limiares_modelo,
+            verificador_citacoes=verificador_citacoes,
+            debug_extracao=debug_extracao,
+            erros_processamento=erros_processamento,
         )
         for a in arquivos
     ]  # 1–6
+    log_erros = gravar_log_erros(erros_processamento, args.logs)
+    if log_erros is not None:
+        documentos_com_erro = len({erro["documento_id"] for erro in erros_processamento})
+        print(
+            f"atenção: {len(erros_processamento)} erro(s) recuperável(is) em "
+            f"{documentos_com_erro} documento(s) -> {log_erros}"
+        )
     print(f"debug da extração: {gravar_debug_extracao(debug_extracao, RAIZ / 'outputs')}")
     submission_csv = gravar_saida(documentos, args.saida)                                   # 7
 

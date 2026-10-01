@@ -236,6 +236,14 @@ uv run --no-default-groups python src/pipeline.py
 Gera `saida/json/<documento_id>.json` (um por documento) e `saida/submission.csv`.
 Com `--avaliar`, também pontua contra o gabarito usando a métrica oficial.
 
+Falhas recuperáveis são isoladas por arquivo: o documento continua presente na
+saída com `citacoes: []`, enquanto os demais arquivos seguem normalmente. Erros
+de leitura ou processamento são registrados em
+`logs/erros_pipeline_<data>.jsonl`. Falhas no detector ou verificador opcional
+usam as regras determinísticas como fallback. Use `--logs <pasta>` para alterar
+o destino dos registros. Falhas globais, como banco ou configuração inválidos,
+continuam interrompendo a execução.
+
 **Alternativa com Docker** (mesmas versões do `uv.lock`; os dados são montados, não copiados para a imagem):
 
 ```bash
