@@ -1,12 +1,212 @@
-# Verificação de citações jurídicas em pareceres de IA
+# Desafio Jusbrasil × BRACIS 2026
 
-Encontre citações de jurisprudência e lei em documentos e classifique cada uma como real, inventada ou incompleta. Jusbrasil × BRACIS 2026.
+Solução para identificar citações de jurisprudência e legislação em documentos
+jurídicos e classificá-las como `real`, `inventada` ou `incompleta`.
+
+> A descrição completa da tarefa, da métrica e das regras da competição está em
+> [docs/descricao_desafio.md](docs/descricao_desafio.md).
+
+## Sobre o projeto
+
+O desafio propõe a construção de um verificador automático de fontes jurídicas.
+A partir de documentos em texto, a solução precisa localizar cada citação,
+preservar seus offsets e verificar se os identificadores informados correspondem
+a um registro da base canônica.
+
+Este repositório implementa um pipeline determinístico, auditável e executável
+offline. O fluxo principal combina regras de extração e normalização com
+consultas a uma base SQLite. Com a mesma entrada e a mesma configuração, a saída
+gerada é sempre a mesma.
+
+## Como a solução funciona
+
+O pipeline separa a detecção textual da verificação jurídica. Primeiro encontra
+trechos que podem representar citações; depois estrutura os identificadores de
+cada trecho e consulta a base canônica para decidir a classificação.
+
+```text
+documentos .txt
+      ↓
+extração de candidatos
+      ↓
+filtro de metadados e distratores
+      ↓
+roteamento por família jurídica
+      ↓
+normalização sem alterar os offsets
+      ↓
+consulta e desambiguação na base SQLite
+      ↓
+classificação + confiança
+      ↓
+JSONs de diagnóstico + submission.csv
+```
+
+### 1. Extração de candidatos
+
+O texto é tokenizado e analisado em busca de marcadores jurídicos e indícios
+próximos, como classe processual, número, tribunal, UF, artigo, diploma legal,
+relatoria e ano. Esses registros são agrupados e pontuados para formar spans de
+citações de jurisprudência e legislação.
+
+Os vocabulários reconhecem abreviações, flexões e parte do ruído encontrado nos
+documentos de nível 2, incluindo trocas de caracteres provocadas por OCR.
+
+Internamente, a etapa segue estes subpassos:
+
+1. **Tokenização:** cria tokens ligados às posições do texto original e mantém
+   uma forma normalizada para as comparações.
+2. **Detecção de evidências:** procura marcadores principais e indícios
+   complementares, como números, tribunais, UFs, datas, relatores e órgãos
+   julgadores.
+3. **Agrupamento:** reúne evidências próximas, respeitando limites de distância,
+   tamanho, sentença e mudança de fonte jurídica.
+4. **Validação do grupo:** define se o conjunto representa legislação ou
+   jurisprudência e verifica se há evidência mínima para formar uma citação.
+5. **Pontuação e recorte:** soma as evidências sem duplicá-las, calcula o span e
+   mantém apenas candidatos que atingem o limiar configurado.
+
+### 2. Filtro contextual
+
+Antes da classificação, o pipeline remove candidatos que parecem citações por
+conter números, mas pertencem a outros contextos. Entre os casos tratados estão:
+
+- número do processo principal e demais campos do cabeçalho;
+- valor da causa, folhas dos autos, OAB e protocolo;
+- metadados rotulados no início do documento.
+
+O filtro identifica a transição entre cabeçalho e corpo para preservar uma
+referência legítima feita na fundamentação, mesmo quando o cabeçalho é longo.
+
+Internamente, a etapa segue estes subpassos:
+
+1. **Leitura estrutural do início do documento:** percorre as linhas para
+   reconhecer rótulos como `Processo`, `Autos`, `Relator` e `Valor da causa`.
+2. **Identificação do processo principal:** normaliza os números encontrados nos
+   campos de processo e determina quando existe um identificador principal
+   inequívoco.
+3. **Detecção do início do corpo:** procura títulos jurídicos, como `EMENTA`,
+   `RELATÓRIO` e `VOTO`, ou a primeira linha com estrutura de texto corrido.
+4. **Análise do candidato:** verifica distratores lexicais, valores monetários e
+   sobreposição com os campos de metadados detectados.
+5. **Decisão conservadora:** exclui somente candidatos com evidência contextual
+   suficiente; os demais seguem no pipeline, acompanhados do trecho original.
+
+### 3. Roteamento e normalização
+
+Cada candidato é encaminhado para uma das famílias suportadas: lei, súmula,
+tema, citação descritiva ou acórdão. A solução então extrai os atributos
+relevantes e normaliza variações como:
+
+- números processuais no padrão CNJ e formatos antigos;
+- pontos, espaços, hífens, travessões e quebras de linha dentro do número;
+- caracteres confundidos pelo OCR, como `O`/`0`, `l`/`1` e `S`/`5`;
+- siglas de tribunais, UFs, classes processuais e modificadores recursais;
+- diplomas legais, apelidos de leis, artigos e listas de artigos;
+- súmulas, súmulas vinculantes, temas e enunciados.
+
+O trecho original e seus offsets são preservados. As formas normalizadas servem
+somente para a consulta e para a decisão semântica.
+
+Internamente, a etapa segue estes subpassos:
+
+1. **Escolha da rota:** usa o tipo detectado e marcadores como `lei`, `súmula` e
+   `tema`; citações numeradas seguem como acórdão e referências sem número podem
+   seguir como descritivas.
+2. **Coleta de contexto local:** adiciona pequenas janelas à esquerda e à
+   direita do span para interpretar qualificadores próximos sem ampliar a
+   citação devolvida.
+3. **Normalização textual:** uniformiza Unicode, separadores numéricos e ruídos
+   de OCR sem reescrever o documento de entrada.
+4. **Extração semântica:** seleciona número, tribunal, classe, UF, diploma,
+   artigo e demais atributos aplicáveis à família escolhida.
+5. **Criação do contrato intermediário:** produz uma `CitacaoNormalizada` que
+   separa o texto original dos campos usados na consulta.
+
+### 4. Resolução na base canônica
+
+Ao iniciar, o `Resolvedor` cria índices em memória a partir da base SQLite. As
+consultas combinam os identificadores disponíveis — como tribunal, classe,
+número, UF, origem, diploma e artigo — para localizar registros compatíveis.
+
+Para acórdãos, a solução tenta primeiro o índice estruturado. Se ele não produz
+um resultado, usa uma busca por número como fallback e valida os metadados dos
+registros encontrados antes de aceitá-los. Isso evita que uma simples
+coincidência numérica seja marcada como uma citação verificada.
+
+Internamente, a etapa segue estes subpassos:
+
+1. **Preparação dos índices:** carrega acórdãos e atos normativos da base e cria
+   mapas por número, identidade jurídica e metadados verificáveis.
+2. **Consulta específica por família:** leis são buscadas por diploma e artigo;
+   súmulas, por tribunal e número; acórdãos, por número e qualificadores.
+3. **Validação de identidade:** rejeita qualificadores incompatíveis, números
+   malformados e combinações que contradizem os dados da base.
+4. **Fallback controlado:** quando o índice estruturado de acórdãos não resolve,
+   busca pelo número e reaplica os filtros de tribunal, classe e UF.
+5. **Desambiguação:** usa modificadores recursais e a classe citada somente
+   quando esses sinais deixam um único registro; caso contrário, preserva todos
+   os candidatos possíveis.
+6. **Resultado auditável:** devolve um `ResultadoResolucao` com classe, ID,
+   caminho de decisão, candidatos, cobertura e motivo.
+
+### 5. Classificação e confiança
+
+A classe representa o resultado da resolução, não apenas a presença de um padrão
+no texto:
+
+| Resultado da resolução | Classificação | Saída |
+|---|---|---|
+| Um único registro compatível | `real` | inclui o `id_canonico` encontrado |
+| Identificadores suficientes, mas nenhum registro compatível | `inventada` | não inclui `id_canonico` |
+| Identificadores ausentes, insuficientes ou compatíveis com vários registros | `incompleta` | preserva a ambiguidade para revisão |
+
+Há regras específicas por família. Por exemplo, uma referência a lei, decreto ou
+resolução sem artigo é `incompleta`, porque a base registra dispositivos e não o
+diploma inteiro. Números explicitamente inválidos ou atos numerados sem
+correspondência na cobertura do desafio são tratados como `inventada`.
+
+Além da classe, o JSON de diagnóstico informa o caminho de decisão, a cobertura
+da base e o motivo do resultado. A confiança é atribuída de acordo com esse
+caminho e pode ser ajustada em `config/pipeline.yaml`.
+
+Internamente, a etapa segue estes subpassos:
+
+1. **Avaliação da evidência:** considera a suficiência dos identificadores e a
+   quantidade de registros compatíveis retornados pelo resolvedor.
+2. **Aplicação das regras da família:** trata situações como diploma sem artigo,
+   súmula sem tribunal, tema não indexado e citação meramente descritiva.
+3. **Proteção do contrato:** permite `id_canonico` somente para citações `real` e
+   exige que toda citação `real` tenha exatamente esse identificador.
+4. **Registro do caminho:** associa cobertura e motivo à decisão para distinguir
+   ausência na base, consulta não realizada e ambiguidade entre registros.
+5. **Atribuição de confiança:** seleciona o valor configurado para o caminho de
+   decisão e garante que o resultado permaneça no intervalo entre `0` e `1`.
+
+### 6. Geração das saídas
+
+Depois que todas as citações de um documento foram processadas, o pipeline
+consolida os resultados e gera os artefatos usados na análise e na submissão.
+
+Internamente, a etapa segue estes subpassos:
+
+1. **Montagem do documento:** agrupa as citações processadas sob o respectivo
+   `documento_id`.
+2. **Diagnóstico da extração:** registra em CSV os candidatos encontrados antes
+   dos filtros para facilitar a investigação de falsos positivos e negativos.
+3. **Persistência detalhada:** grava um JSON por documento, mantendo trechos,
+   offsets, classificação, resolução, confiança e dados de auditoria.
+4. **Conversão oficial:** usa `data/json_to_submission.py` para codificar as
+   citações no formato esperado pelo desafio.
+5. **Avaliação opcional:** com `--avaliar`, executa a métrica oficial somente
+   depois que as predições já foram produzidas.
 
 ## Reprodução e submissão
 
-A solução usa só regras (regex) e consultas à base canônica SQLite. Não usa
-modelos de linguagem, GPU nem internet durante a execução, e a saída é
-determinística: a mesma entrada gera sempre o mesmo `submission.csv`.
+A execução padrão usa somente regras e consultas à base canônica SQLite. Não
+carrega modelos de linguagem, não requer GPU nem acessa a internet durante o
+processamento, e a saída é determinística: a mesma entrada gera sempre o mesmo
+`submission.csv`.
 
 ### Ambiente
 
@@ -74,7 +274,7 @@ Sem `data/desafio1_bracis.db`, os testes que dependem da base são pulados. A se
 do [SETUP.md](SETUP.md) descreve os gates de generalização (registro de regressão,
 holdout sintético e base inteira), os dados necessários e o uso com WSL.
 
-## Overview
+## Detalhes de implementação
 
 ### Configuração do pipeline
 
@@ -110,108 +310,29 @@ spans contidos nesses campos, mesmo em cabeçalhos longos, e preserva referênci
 feitas no corpo. `motivo_distrator` informa a razão de cada exclusão; o limite
 fixo de 400 caracteres não é mais usado.
 
-LLMs generativos já são usados para redigir pareceres, petições e memorandos jurídicos. Um dos riscos mais documentados desses sistemas é a **alucinação de fontes**: o modelo cita jurisprudência ou dispositivos legais que não existem, ou apresenta citações tão vagas que não podem ser verificadas. Nos últimos anos, tribunais no Brasil e no exterior já sancionaram advogados por protocolar peças com citações inventadas geradas por IA.
+## Estrutura do repositório
 
-Neste desafio, você assume o papel de quem precisa construir o verificador automático que falta nesse fluxo de trabalho: um sistema que lê um documento judicial, identifica todas as citações de jurisprudência e de lei, e decide — para cada uma — se ela é **real**, **inventada** ou **incompleta**.
-
-### A tarefa
-
-Seu sistema recebe documentos judiciais em texto (`.txt`) e deve, para cada documento, identificar todas as citações e classificar cada uma em três classes:
-
-* **`real`** — a citação resolve a um único registro da base canônica do desafio: tem identificadores suficientes e a busca confirma sua existência. Exige entregar o `id_canonico` correto — acertar o rótulo sem o link não conta.
-* **`inventada`** — identificadores suficientes para buscar, mas nenhum registro correspondente existe na cobertura congelada.
-* **`incompleta`** — informação insuficiente para formular a consulta ("conforme jurisprudência pacífica do tribunal"), ou suficiente para buscar mas insuficiente para identificar um único registro.
-
-A distinção entre `inventada` e `incompleta` importa em produção: a primeira é alucinação ativa (o LLM inventou um número de acórdão); a segunda é evasiva. Sistemas reais tratam cada caso de forma diferente — incompletas vão para revisão humana; inventadas devem ser bloqueadas.
-
-O conjunto tem **dois níveis de dificuldade**: Nível 1 (formato padrão, peso 1×) e Nível 2 (ruído de OCR e variação de superfície, peso 2×). Os detalhes de dados, base canônica e gabarito estão na aba **Data**.
-
-### Como participar
-
-1. **Monte sua equipe**: participação individual ou em equipes de até 4 pessoas (mesclagem de equipes pelo próprio Kaggle), apenas estudantes, do Brasil — a elegibilidade é verificada pela organização (ver Rules).
-2. **Receba os dados**: documentos de entrada (`txt/`), base canônica SQLite e gabarito da amostra de desenvolvimento estão na aba **Data**, junto com o conversor de submissão e o script da métrica.
-3. **Desenvolva sua solução** — apenas modelos e ferramentas de pesos e código **abertos** (veja Rules). Qualquer dataset público pode ser usado no treino.
-4. **Submeta**: sua solução produz um JSON por documento (contrato na aba Data); o conversor `json_to_submission.py` gera o `submission.csv` que você envia aqui. A métrica oficial roda no servidor e o leaderboard atualiza na hora.
-5. **Publique seu código**: as soluções do topo do ranking passam por verificação de reprodutibilidade ao final — o repositório e o commit que produziram as saídas serão coletados junto aos finalistas.
-
-### Organização
-
-O desafio é uma realização do **Jusbrasil** — empresa de tecnologia que conecta milhões de brasileiros à informação jurídica — em parceria com o **BRACIS 2026** — 36ª Brazilian Conference on Intelligent Systems, promovida pela Sociedade Brasileira de Computação.
-
-Dúvidas sobre o desafio, a especificação técnica ou a logística: **desafio-bracis@jusbrasil.com.br**.
-
-## Avaliação
-
-A avaliação tem **duas fases**:
-
-1. **Fase de treino (agora)** — o material distribuído é a amostra de desenvolvimento, com gabarito aberto. O leaderboard roda sobre ela e é **referencial**: serve para validar seu pipeline de ponta a ponta, não define o resultado.
-2. **Fase de avaliação final** — o conjunto final, cego, está em construção pela organização. Quando for ativado, o leaderboard **reinicia**: passa a usar **40% dele** (parte pública do leaderboard), e o ranking final é calculado sobre os **60% restantes**, mantidos em sigilo até o encerramento — otimizar demais para o leaderboard não garante nada no resultado final. Submissões da fase de treino não contam para o ranking final.
-
-O alinhamento entre suas citações e o gabarito é por **sobreposição de spans com IoU ≥ 0,5** (matching 1-para-1 pelo maior IoU). Citação do gabarito sem par vira erro de recall; predição sem par vira falso positivo. Sobre os pares casados, a nota de cada nível é montada em três passos:
-
-**Passo 1 — macro-F1 das 3 classes.** F1 por classe (`real`, `inventada`, `incompleta`), com média simples entre elas — assim a classe `inventada`, rara mas central ao desafio, pesa tanto quanto a `real`. Para a classe `real`, só conta acerto se o `id_canonico` entregue for o doc\_id esperado no gabarito.
-
-**Passo 2 — penalidade do erro grave.** O pior erro é carimbar uma alucinação como verificada:
-
-```py
-τ = fração das citações `inventada` do gabarito preditas como `real`
-s = macroF1 · (1 − 0,5 · τ)
+```text
+config/             vocabulários e parâmetros do pipeline
+data/               scripts oficiais e dados locais do desafio
+docs/               descrição do desafio e documentação complementar
+analise/             notebooks e registros usados nas análises
+src/
+├── pipeline.py      orquestra o processamento de ponta a ponta
+├── steps/           etapas de extração, resolução e geração da saída
+├── validacao/       gates de generalização e robustez
+└── ml_citacoes/     experimentos opcionais de detecção e verificação
+tests/               testes unitários, integração e regressão
+saida/               JSONs, CSV e pacotes produzidos
 ```
 
-Se todas as alucinações "vazarem" como real, a nota cai pela metade.
+O pipeline reproduzível descrito neste README usa o fluxo baseado em regras e
+SQLite. Os módulos de `src/ml_citacoes/` são extensões experimentais opcionais e
+não são necessários para gerar a submissão padrão.
 
-**Passo 3 — bônus de calibração (até 10%).** O campo `confianca` é opcional; se enviado, medimos o Brier score sobre os pares casados e aplicamos `score = s · (1 + 0,10 · (1 − brier))`. Confiança alta quando acerta e baixa quando erra aproxima o bônus de +10%. Quem não envia confiança não ganha nem perde.
+## Documentação relacionada
 
-**Combinação dos níveis:**
-```py
-score_final = (1 · score_Nível1 + 2 · score_Nível2) / 3
-```
-Uma submissão perfeita com `confianca = 1.0` pontua **1.1000**.
-
-### Formato de submissão
-
-Sua solução produz um JSON por documento (contrato schema 1.2, na aba Data); o conversor `json_to_submission.py` (incluído no material) gera o `submission.csv` — **uma linha por documento**:
-```python
-documento_id,citacoes
-gen_n1_001,"469,498,incompleta,-,0.9|589,652,incompleta,-,0.8"
-gen_n1_002,-
-```
-Cada citação é `inicio,fim,classe,id_canonico,confianca` (campos ausentes viram `-`), com citações separadas por `|`. Documento **sem** citações leva `-` na célula — nunca deixe a célula vazia, e todo `documento_id` do conjunto precisa estar presente.
-
-**Reproduza localmente:** o script de avaliação (`kaggle_metric.py`, na aba Data) é o mesmo que roda aqui — você reproduz na sua máquina exatamente o score do leaderboard, nível a nível, incluindo o matching.
-
-## Cronograma e Premiação
-
-### Cronograma
-| Marco | Data |
-|---|---|
-| Abertura das inscrições | 18/08/2026 |
-| Envio dos dados por e-mail aos inscritos | 25/08/2026 |
-| Webinar de tira-dúvidas com a organização | 28/08/2026 |
-| Período de submissões com leaderboard ao vivo | 01/09 a 30/09/2026 |
-| Fechamento das submissões | 30/09/2026, 23h59 (BRT) |
-| Apresentação das melhores soluções no BRACIS 2026 (Cuiabá-MT) | 19 a 22/10/2026 |
-
-Todas as datas em horário de Brasília (BRT).
-
-### Premiação e reconhecimento
-
-* **Apresentação técnica no BRACIS 2026**: as 5 melhores soluções apresentam na sessão de encerramento da conferência, em Cuiabá-MT.
-* **Contribuição à comunidade**: o desafio libera um benchmark público de NLP jurídico em português após a conferência; as soluções vencedoras entram como referência.
-
-## FAQ
-
-**Preciso estar inscrito no BRACIS para participar?** Não. Apenas as equipes vencedoras precisam comparecer (ou enviar um representante) à sessão de encerramento da conferência.
-
-**Posso usar APIs comerciais, como modelos de linguagem pagos?** Não. Este desafio aceita **apenas modelos e ferramentas de pesos e código abertos** — a organização precisa conseguir executar sua solução de ponta a ponta, sem chaves de API nem serviços pagos. Servir um modelo de pesos abertos via API paga durante o desenvolvimento é permitido, desde que o mesmo modelo e revisão sejam executáveis offline pela organização. Qualquer dataset **público** pode ser usado no treino.
-
-**Como funciona o leaderboard? Meu score final pode mudar?** Em duas fases. Agora, na fase de treino, o leaderboard pontua contra a amostra de desenvolvimento (gabarito aberto) e é referencial — use-o para validar seu pipeline. Quando o conjunto de avaliação final for ativado, o leaderboard reinicia e passa a usar a parte pública (40%) dele; o ranking final vem dos 60% privados, mantidos em sigilo até o encerramento — a posição pública é um bom sinal, mas o resultado final pode mudar.
-
-**Quantas submissões posso fazer?** Múltiplas, com teto diário por equipe (configurado nesta competição).
-
-**O offset (`inicio`/`fim`) pontua?** Não por si só — ele é a chave de junção com o gabarito (IoU ≥ 0,5). Acima do limiar, a borda exata é irrelevante; abaixo, a citação esperada fica sem par (erro de recall) e a predição órfã vira falso positivo. Cuidado com a contagem: codepoints Unicode sobre o texto exatamente como distribuído.
-
-**O campo `confianca` é obrigatório?** Não, mas é recomendado: confiança bem calibrada (Brier baixo) rende bônus de até 10% no score.
-
-**Em que língua são os documentos?** Português brasileiro, com citações de jurisprudência e legislação brasileiras.
-
+- [Descrição completa do desafio](docs/descricao_desafio.md)
+- [Instalação, execução e submissão](SETUP.md)
+- [Estratégia de validação](src/validacao/README.md)
+- [Geração dos documentos sintéticos](docs/GERACAO_DOCUMENTOS_SINTETICOS.md)
