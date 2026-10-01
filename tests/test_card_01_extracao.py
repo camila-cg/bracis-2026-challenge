@@ -117,10 +117,32 @@ class TiposDeCitacao(unittest.TestCase):
                 self.assertTrue(any(item["tipo"] == "jurisprudencia" for item in encontrados))
 
     def test_sumulas_comuns_e_vinculantes(self):
-        for trecho in ("Súmula 83 do STJ", "Súmula Vinculante 10 do STF", "sum. 331 do TST"):
+        for trecho in (
+            "Súmula 83",
+            "Súmula nº 83",
+            "Súmula n. 83",
+            "Sum. 331",
+            "Súmula Vinculante 10",
+            "Súmula 83 do STJ",
+            "Súmula nº 83 do STJ",
+            "Súmula do STJ nº 83",
+            "Súmula STJ 83",
+        ):
             with self.subTest(trecho=trecho):
                 encontrados = candidatos("Aplica-se a " + trecho + ".")
                 self.assertTrue(any(item["tipo"] == "jurisprudencia" for item in encontrados))
+
+    def test_sumula_exige_identificador_local(self):
+        for trecho in (
+            "A orientação sumulada será examinada. Controle: 2026, 64, 03.",
+            "A Súmula será examinada oportunamente. Controle: 2026, 64, 03.",
+            "A Súmula mencionada no relatório 64 será revisada.",
+            "A súmula do tribunal será revisada.",
+            "A Sum 331 foi aplicada.",
+            "A Súmula do STJ. Controle: 83.",
+        ):
+            with self.subTest(trecho=trecho):
+                self.assertEqual(candidatos(trecho), [])
 
     def test_sv_exata_sem_aproximacao_aceita_qualquer_caixa(self):
         for sigla in ("SV", "Sv", "sV", "sv"):
