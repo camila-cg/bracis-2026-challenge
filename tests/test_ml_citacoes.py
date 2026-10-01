@@ -9,6 +9,7 @@ import json
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 import numpy as np
@@ -22,7 +23,7 @@ from ml_citacoes.contratos import CitacaoModelo, LABEL2ID, ResultadoVerificacao
 from ml_citacoes.fusao import fusionar
 from ml_citacoes.metricas import avaliar_spans
 from ml_citacoes.selecionar_modelo import selecionar
-from ml_citacoes.splits import criar_folds, preparar, validar_origem_original, validar_sem_vazamento
+from ml_citacoes.splits import criar_folds, ler_dataset_sintetico, preparar, validar_origem_original, validar_sem_vazamento
 from ml_citacoes.treinar import (
     _amostrar_tokens_o,
     _argumentos_checkpointing,
@@ -71,6 +72,32 @@ class AlinhamentoBIO(unittest.TestCase):
 
 
 class SplitsEAumento(unittest.TestCase):
+    def test_le_dataset_sintetico_dentro_de_zip_com_pasta_raiz(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            raiz = Path(tmp)
+            pacote = raiz / "pacote"
+            (pacote / "txt").mkdir(parents=True)
+            texto = "Texto sem citação."
+            (pacote / "txt" / "doc.txt").write_text(texto, encoding="utf-8")
+            (pacote / "manifest.csv").write_text(
+                "documento_id,arquivo,nivel\ndoc,txt/doc.txt,1\n", encoding="utf-8"
+            )
+            (pacote / "goldenset_offsets.csv").write_text(
+                "documento_id,inicio,fim,trecho,tipo,classificacao\n", encoding="utf-8"
+            )
+            caminho_zip = raiz / "sintetico.zip"
+            with zipfile.ZipFile(caminho_zip, "w") as arquivo:
+                for caminho in pacote.rglob("*"):
+                    if caminho.is_file():
+                        arquivo.write(caminho, Path("pasta_raiz") / caminho.relative_to(pacote))
+
+            documentos = ler_dataset_sintetico(caminho_zip)
+
+            self.assertEqual(len(documentos), 1)
+            self.assertEqual(documentos[0]["documento_id"], "doc")
+            self.assertEqual(documentos[0]["texto"], texto)
+            self.assertEqual(documentos[0]["spans"], [])
+
     def test_fold_e_inteiramente_agrupado_por_documento(self):
         docs = [
             {"documento_id": f"doc_{i}", "texto": "x", "spans": [{"tipo": "lei" if i % 2 else "jurisprudencia", "classificacao": "real", "nivel": str(1 + i % 2)}]}

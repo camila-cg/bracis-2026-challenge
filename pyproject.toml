@@ -36,3 +36,15 @@ llm = [
 [tool.uv]
 package = false
 default-groups = ["dev", "notebooks"]
+
+[tool.uv.sources]
+# PyPI publica apenas a wheel CPU do torch no Windows. A origem explícita evita
+# que uma máquina NVIDIA pareça configurada corretamente, mas treine na CPU.
+torch = [
+    { index = "pytorch-cu130", marker = "sys_platform == 'win32'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import csv
+import io
 import json
 import random
+import zipfile
 from collections import Counter
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 def validar_origem_original(*caminhos: Path) -> None:
@@ -63,13 +65,63 @@ def ler_dataset_original(pasta_txt: Path, goldenset: Path) -> list[dict]:
 def ler_dataset_sintetico(raiz: Path) -> list[dict]:
     """Lê um pacote sintético validado, incluindo documentos sem citações."""
     raiz = raiz.resolve()
+    if raiz.is_file() and raiz.suffix.lower() == ".zip":
+        with zipfile.ZipFile(raiz) as arquivo:
+            nomes = []
+            for membro in arquivo.infolist():
+                caminho = PurePosixPath(membro.filename.replace("\\", "/"))
+                if caminho.is_absolute() or ".." in caminho.parts:
+                    raise ValueError(f"caminho inseguro no pacote sintético: {membro.filename}")
+                nomes.append(caminho)
+            manifestos = sorted(caminho for caminho in nomes if caminho.name == "manifest.csv")
+            if len(manifestos) != 1:
+                raise ValueError(
+                    "pacote sintético deve conter exatamente um manifest.csv; "
+                    f"encontrados: {len(manifestos)}"
+                )
+            prefixo = manifestos[0].parent
+            goldenset = prefixo / "goldenset_offsets.csv"
+            nomes_texto = {str(caminho) for caminho in nomes}
+            if str(goldenset) not in nomes_texto:
+                raise ValueError(f"pacote sintético incompleto: {raiz}")
+
+            def ler_arquivo(caminho_relativo: str) -> bytes:
+                relativo = PurePosixPath(caminho_relativo.replace("\\", "/"))
+                if relativo.is_absolute() or ".." in relativo.parts:
+                    raise ValueError(f"arquivo sintético inválido: {caminho_relativo}")
+                nome = str(prefixo / relativo)
+                if nome not in nomes_texto:
+                    raise ValueError(f"arquivo sintético inválido: {caminho_relativo}")
+                return arquivo.read(nome)
+
+            return _ler_dataset_sintetico_conteudo(
+                arquivo.read(str(manifestos[0])).decode("utf-8-sig"),
+                arquivo.read(str(goldenset)).decode("utf-8-sig"),
+                ler_arquivo,
+            )
     manifesto_path = raiz / "manifest.csv"
     goldenset_path = raiz / "goldenset_offsets.csv"
     if not manifesto_path.is_file() or not goldenset_path.is_file():
         raise ValueError(f"pacote sintético incompleto: {raiz}")
 
+    def ler_arquivo(caminho_relativo: str) -> bytes:
+        caminho = (raiz / caminho_relativo).resolve()
+        if raiz not in caminho.parents or not caminho.is_file():
+            raise ValueError(f"arquivo sintético inválido: {caminho_relativo}")
+        return caminho.read_bytes()
+
+    return _ler_dataset_sintetico_conteudo(
+        manifesto_path.read_text(encoding="utf-8-sig"),
+        goldenset_path.read_text(encoding="utf-8-sig"),
+        ler_arquivo,
+    )
+
+
+def _ler_dataset_sintetico_conteudo(
+    manifesto_texto: str, goldenset_texto: str, ler_arquivo
+) -> list[dict]:
     metadados: dict[str, dict[str, str]] = {}
-    with manifesto_path.open(encoding="utf-8-sig", newline="") as arquivo:
+    with io.StringIO(manifesto_texto, newline="") as arquivo:
         leitor = csv.DictReader(arquivo)
         obrigatorias = {"documento_id", "arquivo", "nivel"}
         if not obrigatorias.issubset(leitor.fieldnames or []):
@@ -81,7 +133,7 @@ def ler_dataset_sintetico(raiz: Path) -> list[dict]:
             metadados[documento_id] = linha
 
     por_documento: dict[str, list[dict]] = {documento_id: [] for documento_id in metadados}
-    with goldenset_path.open(encoding="utf-8-sig", newline="") as arquivo:
+    with io.StringIO(goldenset_texto, newline="") as arquivo:
         leitor = csv.DictReader(arquivo)
         obrigatorias = {"documento_id", "inicio", "fim", "trecho", "tipo", "classificacao"}
         if not obrigatorias.issubset(leitor.fieldnames or []):
@@ -102,12 +154,9 @@ def ler_dataset_sintetico(raiz: Path) -> list[dict]:
 
     documentos = []
     for documento_id, meta in sorted(metadados.items()):
-        caminho = (raiz / meta["arquivo"]).resolve()
-        if raiz not in caminho.parents or not caminho.is_file():
-            raise ValueError(f"arquivo sintético inválido: {meta['arquivo']}")
-        bruto = caminho.read_bytes()
+        bruto = ler_arquivo(meta["arquivo"])
         if b"\r\n" in bruto:
-            raise ValueError(f"{caminho}: CRLF deslocaria os offsets")
+            raise ValueError(f"{meta['arquivo']}: CRLF deslocaria os offsets")
         texto = bruto.decode("utf-8")
         spans = sorted(por_documento[documento_id], key=lambda item: (item["inicio"], item["fim"]))
         fim_anterior = 0

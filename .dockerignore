@@ -1,5 +1,8 @@
 .git/
 .venv/
+.uv-cache/
+.hf-cache/
+.tmp-tests/
 **/__pycache__/
 .ipynb_checkpoints/
 data/

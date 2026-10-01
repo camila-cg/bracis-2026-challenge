@@ -6,6 +6,36 @@ Todas geram o mesmo resultado. Execute os comandos na raiz do repositório.
 A solução usa só regras (regex) e consultas à base SQLite: não precisa de GPU,
 de modelos nem de internet durante a execução (só para instalar as dependências).
 
+## Imagem Docker com BERTimbau Large (sem Ollama)
+
+A variante ML usa `Dockerfile.ml` e incorpora no build o modelo público
+`giovannalavouras/bertimbau-large-citacoes-juridicas`, fixado pela revisão
+`44697e852ef12493d0c9f560ad7da1e513dcdb35`. O contêiner não acessa a internet
+durante a execução e não depende de Ollama. O host precisa de GPU NVIDIA, driver
+compatível e NVIDIA Container Toolkit configurado.
+
+```powershell
+docker build -f Dockerfile.ml -t bracis-2026-ml .
+
+docker run --rm --gpus all `
+  -v "${PWD}/data:/app/data:ro" `
+  -v "${PWD}/saida:/app/saida" `
+  bracis-2026-ml
+```
+
+Argumentos adicionais são repassados ao pipeline. Por exemplo, para pontuar no
+golden set montado em `data/`:
+
+```powershell
+docker run --rm --gpus all `
+  -v "${PWD}/data:/app/data:ro" `
+  -v "${PWD}/saida:/app/saida" `
+  bracis-2026-ml --avaliar
+```
+
+O download do Hugging Face ocorre apenas em `docker build`; por isso o build
+precisa de internet, mas a imagem resultante é portável e executa offline.
+
 ## Passo a passo: da pasta do repositório ao zip de submissão
 
 Comandos para PowerShell (Windows). As seções seguintes detalham cada etapa.

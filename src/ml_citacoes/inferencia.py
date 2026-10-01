@@ -37,40 +37,63 @@ class DetectorBIO:
             raise ValueError("decodificador deve ser argmax ou viterbi")
         try:
             import torch
-            from peft import PeftModel
             from transformers import AutoModelForTokenClassification, AutoTokenizer
         except ImportError as exc:
             raise RuntimeError(
-                "inferência BIO requer torch, transformers e peft; consulte requirements-ml.txt"
+                "inferência BIO requer torch e transformers; consulte requirements-ml.txt"
             ) from exc
-        manifesto = json.loads((pasta / "manifesto.json").read_text(encoding="utf-8"))
-        checkpoint = manifesto["checkpoint"]
-        revisao = manifesto.get("revisao_resolvida")
-        if not revisao:
-            raise ValueError("artefato sem revisão exata do checkpoint")
-        tokenizer = AutoTokenizer.from_pretrained(
-            pasta / "tokenizer" if (pasta / "tokenizer").exists() else checkpoint,
-            revision=None if (pasta / "tokenizer").exists() else revisao,
-            local_files_only=not permitir_download,
-            use_fast=True,
-        )
-        base = AutoModelForTokenClassification.from_pretrained(
-            checkpoint,
-            revision=revisao,
-            local_files_only=not permitir_download,
-            num_labels=5,
-            id2label={0: "O", 1: "B-LEI", 2: "I-LEI", 3: "B-JUR", 4: "I-JUR"},
-            label2id={"O": 0, "B-LEI": 1, "I-LEI": 2, "B-JUR": 3, "I-JUR": 4},
-        )
-        modelo = PeftModel.from_pretrained(base, pasta / "adaptador")
+        pasta = Path(pasta)
+        manifesto_path = pasta / "manifesto.json"
+        if manifesto_path.exists():
+            manifesto = json.loads(manifesto_path.read_text(encoding="utf-8"))
+            checkpoint = manifesto["checkpoint"]
+            revisao = manifesto.get("revisao_resolvida")
+            if not revisao:
+                raise ValueError("artefato sem revisão exata do checkpoint")
+            tokenizer = AutoTokenizer.from_pretrained(
+                pasta / "tokenizer" if (pasta / "tokenizer").exists() else checkpoint,
+                revision=None if (pasta / "tokenizer").exists() else revisao,
+                local_files_only=not permitir_download,
+                use_fast=True,
+            )
+            base = AutoModelForTokenClassification.from_pretrained(
+                checkpoint,
+                revision=revisao,
+                local_files_only=not permitir_download,
+                num_labels=5,
+                id2label={0: "O", 1: "B-LEI", 2: "I-LEI", 3: "B-JUR", 4: "I-JUR"},
+                label2id={"O": 0, "B-LEI": 1, "I-LEI": 2, "B-JUR": 3, "I-JUR": 4},
+            )
+            try:
+                from peft import PeftModel
+            except ImportError as exc:
+                raise RuntimeError("artefato LoRA requer peft; consulte requirements-ml.txt") from exc
+            modelo = PeftModel.from_pretrained(base, pasta / "adaptador")
+            max_length = int(manifesto.get("max_length", 512))
+            stride = int(manifesto.get("stride", 96))
+            temperatura = float(manifesto.get("temperatura", 1.0))
+        elif (pasta / "config.json").exists() and (pasta / "model.safetensors").exists():
+            # Snapshot HF já mesclado: todos os pesos e o tokenizer ficam locais.
+            tokenizer = AutoTokenizer.from_pretrained(pasta, local_files_only=True, use_fast=True)
+            modelo = AutoModelForTokenClassification.from_pretrained(pasta, local_files_only=True)
+            labels = {int(indice): rotulo for indice, rotulo in modelo.config.id2label.items()}
+            esperados = {0: "O", 1: "B-LEI", 2: "I-LEI", 3: "B-JUR", 4: "I-JUR"}
+            if labels != esperados:
+                raise ValueError(f"rótulos incompatíveis no modelo mesclado: {labels}")
+            max_length, stride, temperatura = 512, 96, 1.0
+        else:
+            raise ValueError(
+                "artefato inválido: esperado LoRA com manifesto.json ou modelo mesclado "
+                "com config.json e model.safetensors"
+            )
         modelo.eval()
         if torch.cuda.is_available():
             modelo.to("cuda")
         return cls(
             tokenizer, modelo,
-            max_length=int(manifesto.get("max_length", 512)),
-            stride=int(manifesto.get("stride", 96)),
-            temperatura=float(manifesto.get("temperatura", 1.0)),
+            max_length=max_length,
+            stride=stride,
+            temperatura=temperatura,
             decodificador=decodificador,
             lote_janelas=lote_janelas,
         )
