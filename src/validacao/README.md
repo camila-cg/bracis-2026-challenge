@@ -44,9 +44,27 @@ abreviada como apareceria num documento real. Os cabeçalhos do TSE que o
 parser lê mal geram frases estranhas. Os registros sem parser ficam fora do
 teste; o script só informa quantos são.
 
+### `lookup_isolado.py` — índice e resolvedor, sem extração
+
+Para cada acórdão do índice, monta direto uma citação com a chave que o próprio
+índice guarda (tribunal, classe, número, UF) e pede ao resolvedor o registro
+correspondente, sem passar pela extração de spans nem pela normalização de
+texto. Desfechos:
+
+- `ok`: `real` com o id esperado;
+- `ambiguo_com_esperado`: `incompleta` com o id esperado entre os candidatos
+  (resposta correta quando há duplicata no acervo);
+- `ambiguo_sem_esperado`, `real_errado` e `inventada`: falhas do índice ou da
+  regra de resolução.
+
+Pergunta que responde: **o índice e a regra de resolução entregam o registro
+certo quando a citação chega perfeita?** Comparado ao `teste_base_inteira.py`,
+mostra em que etapa um registro se perde: se aqui acerta e lá não, a falha está
+antes do índice (extração ou normalização).
+
 ## Como executar
 
-Da raiz do repositório. Os dois scripts precisam de `data/desafio1_bracis.db`
+Da raiz do repositório. Os scripts precisam de `data/desafio1_bracis.db`
 e `data/txt/`, e o `estresse.py` também de `data/goldenset_offsets.csv` e
 `data/kaggle_metric.py`.
 
@@ -71,6 +89,15 @@ python src/validacao/teste_base_inteira.py
 
 Opções: `--top N` define quantos grupos de falha listar (padrão 25) e
 `--exemplos N` quantas frases de exemplo mostrar (padrão 8).
+
+`lookup_isolado.py` também só usa a biblioteca padrão:
+
+```bash
+python src/validacao/lookup_isolado.py
+```
+
+Opção: `--exemplos N` define quantos registros de exemplo das falhas mostrar
+(padrão 8).
 
 Sem instalar nada no ambiente, com `uv`:
 
