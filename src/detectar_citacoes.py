@@ -699,11 +699,34 @@ def procurar_marcadores_principais(tokens, texto_original):
 
 
 _INDICADORES_NUMERO_PROCESSUAL = {"n", "nº", "n°", "numero"}
+# Classes numeradas em sequência curta (``IAC 15/STJ``): o número vem logo
+# depois da classe, com ou sem ``nº``, e a própria classe já é o contexto forte.
+# Número antes da classe (``15 casos no IAC``) não conta.
+_CLASSES_NUMERO_CURTO_SEM_INDICADOR = tuple(
+    re.compile(item["padrao"] + r"$", re.I)
+    for item in _CLASSES["classes_citadas"]
+    if item["classe"] in set(_CLASSES.get("classes_numero_curto_sem_indicador", []))
+)
 
 
 def numero_curto_em_contexto_forte(indice, tokens):
     """Reconhece 1–2 dígitos só depois de classe conhecida e `nº` equivalente."""
     texto = tokens[indice]["normalizado"]
+    sem_indicador = re.fullmatch(r"\d{1,2}(?:/([a-z]{2,3}))?", texto)
+    if sem_indicador and indice > 0:
+        sufixo = sem_indicador.group(1)
+        # O ``nº`` é opcional aqui; quando aparece, a sigla vem antes dele.
+        fim_classe = indice
+        if tokens[indice - 1]["normalizado"] in _INDICADORES_NUMERO_PROCESSUAL:
+            fim_classe -= 1
+        # Oito tokens cobrem "questao de ordem no incidente de assuncao de competencia".
+        anteriores = " ".join(
+            token["normalizado"] for token in tokens[max(0, fim_classe - 8):fim_classe]
+        )
+        if (sufixo is None or sufixo in UFS or sufixo in TRIBUNAIS) and any(
+            padrao.search(anteriores) for padrao in _CLASSES_NUMERO_CURTO_SEM_INDICADOR
+        ):
+            return True
     curto = re.fullmatch(r"\d{1,2}(?:[/-]([a-z]{2}))?", texto)
     if curto is None or (curto.group(1) and curto.group(1) not in UFS):
         return False

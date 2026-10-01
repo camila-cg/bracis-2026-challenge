@@ -40,6 +40,15 @@ class ContextoForte(unittest.TestCase):
             with self.subTest(trecho=trecho):
                 self.assertIsNone(normalizar(trecho).numero)
 
+    def test_iac_libera_numero_curto_sem_marcador(self):
+        for trecho in ("IAC 15/STJ", "QO no IAC 15/STJ", "IAC 15 do STJ"):
+            with self.subTest(trecho=trecho):
+                citacao = normalizar(trecho)
+                self.assertEqual(
+                    (citacao.classe, citacao.numero),
+                    ("incidentedeassuncaodecompetencia", "15"),
+                )
+
     def test_fallback_curto_nao_recorta_prefixo_de_numero_maior(self):
         self.assertEqual(normalizar("Cautelar Inominada Criminal nº 87.123/DF").numero, "87123")
 
@@ -93,6 +102,55 @@ class BaseCanonica(unittest.TestCase):
             normalizar("Cautelar Inominada Criminal nº 42/DF")
         )
         self.assertEqual((resultado.classe, resultado.caminho), ("inventada", "acordao_zero"))
+
+    def test_iac_com_numero_curto_sem_marcador_chega_ao_lookup(self):
+        # A base não tem IAC: com o número consultado, a resposta é inventada,
+        # não incompleta por número ausente.
+        for forma in ("QO no IAC 15/STJ", "IAC 15/STJ", "IAC 15 do STJ", "IAC nº 15 do STJ"):
+            with self.subTest(forma=forma):
+                texto = f"A tese foi firmada no {forma}, aplicável ao caso."
+                citacoes = processar_documento("sintetico", texto, self.resolvedor)["citacoes"]
+                self.assertEqual(len(citacoes), 1)
+                self.assertTrue(citacoes[0]["trecho"].startswith(forma.split()[0]))
+                self.assertEqual(
+                    (citacoes[0]["classificacao"], citacoes[0]["caminho"]),
+                    ("inventada", "acordao_zero"),
+                )
+
+    def test_iac_por_extenso_e_detectado_e_consultado(self):
+        for forma in (
+            "Incidente de Assunção de Competência 15/STJ",
+            "Incidente de Assunção de Competência nº 15 do STJ",
+            "Incidente de Assunção de Competência n. 15/STJ",
+            "Questão de Ordem no Incidente de Assunção de Competência 15/STJ",
+        ):
+            with self.subTest(forma=forma):
+                texto = f"A tese foi firmada no {forma}, aplicável ao caso."
+                citacoes = processar_documento("sintetico", texto, self.resolvedor)["citacoes"]
+                self.assertEqual([c["trecho"] for c in citacoes], [forma])
+                self.assertEqual(
+                    (citacoes[0]["classificacao"], citacoes[0]["caminho"]),
+                    ("inventada", "acordao_zero"),
+                )
+
+    def test_numero_antes_do_iac_nao_abre_citacao(self):
+        # "o IAC" sem número próprio é menção vaga; o número da frase não é dele.
+        for texto in (
+            "Foram 15 casos no IAC.",
+            "Há 3 votos no IAC do STJ.",
+            "O IAC foi instaurado.",
+        ):
+            with self.subTest(texto=texto):
+                self.assertEqual(
+                    processar_documento("sintetico", texto, self.resolvedor)["citacoes"],
+                    [],
+                )
+
+    def test_iac_com_sufixo_que_nao_e_tribunal_nem_uf_nao_e_consultado(self):
+        citacoes = processar_documento(
+            "sintetico", "Aplica-se o IAC 15/XX ao caso.", self.resolvedor
+        )["citacoes"]
+        self.assertNotEqual([c["caminho"] for c in citacoes], ["acordao_zero"])
 
 
 if __name__ == "__main__":

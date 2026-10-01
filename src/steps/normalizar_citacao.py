@@ -46,6 +46,10 @@ _MARCADOR_NUMERO = re.compile(
 _NUMERO_PROCESSUAL_CURTO = re.compile(
     r"^\s*(?P<numero>\d{1,2})(?!\d)(?!\s*[.\-–—]\s*\d)(?!\s*/\s*\d)"
 )
+# Classes cujo número curto vem logo depois da sigla, sem ``nº`` (``IAC 15/STJ``).
+_CLASSES_NUMERO_CURTO_SEM_INDICADOR = set(
+    carregar_config("classes_processuais").get("classes_numero_curto_sem_indicador", [])
+)
 _LIGACAO_QUALIFICADOR = re.compile(
     r"\s*(?:(?:,|e)\s*)?"
     r"(?:(?:do|da|dos|das|no|na|nos|nas|pelo|pela)\s+)?",
@@ -201,13 +205,13 @@ def _numero_acordao(trecho: str) -> str | None:
     """Seleciona o identificador associado à classe, não um ano de contexto."""
     sem_acento = _sem_acento(trecho)
     classes = [
-        achado
-        for padrao, _classe in ind.CLASSES_CITADAS
+        (achado, classe)
+        for padrao, classe in ind.CLASSES_CITADAS
         for achado in padrao.finditer(sem_acento)
     ]
     # A classe-base costuma ser a ocorrência mais à direita em cadeias como
     # "AgInt no REsp". Procurar a partir dela também ignora anos introdutórios.
-    for achado in sorted(classes, key=lambda item: item.start(), reverse=True):
+    for achado, classe in sorted(classes, key=lambda item: item[0].start(), reverse=True):
         sufixo = trecho[achado.end():]
         marcador = _MARCADOR_NUMERO.search(_sem_acento(sufixo))
         if marcador:
@@ -216,7 +220,10 @@ def _numero_acordao(trecho: str) -> str | None:
             )
             if numero is not None:
                 return numero
-        numero = _canonizar_numero_acordao(ANO_SOLTO.sub(" ", sufixo))
+        numero = _canonizar_numero_acordao(
+            ANO_SOLTO.sub(" ", sufixo),
+            aceitar_curto=classe in _CLASSES_NUMERO_CURTO_SEM_INDICADOR,
+        )
         if numero is not None:
             return numero
 

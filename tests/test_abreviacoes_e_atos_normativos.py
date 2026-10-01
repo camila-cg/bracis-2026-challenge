@@ -9,8 +9,7 @@ O dev oficial não tem nenhuma dessas formas (só nomes por extenso e as siglas
 `CLT`/`CPC`/`CPP`): elas vêm dos conjuntos sintéticos. Por isso os testes incluem
 guardas contra falso positivo em prosa comum.
 
-`IAC` ("QO no IAC 15/STJ") ficou de fora: o span invade a frase seguinte e piora o
-gate de distratores; depende de corrigir a fronteira de span.
+`IAC` ("QO no IAC 15/STJ") está em `test_numeros_processuais_curtos.py`.
 """
 
 import sqlite3

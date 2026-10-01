@@ -10,13 +10,14 @@
     "precedente", "agr", "mandado de seguranca", "apelacao", "apelacao criminal", "sv",
     "ap crim", "ap criminal",
     "airr", "rrag", "pext", "embargos infringentes", "enunciado",
-    "cautelar inominada", "cautelar inominada criminal", "iac", "qo no iac",
+    "cautelar inominada", "cautelar inominada criminal", "iac", "qo no iac", "incidente de assuncao de competencia",
+    "questao de ordem no incidente de assuncao de competencia",
     "acao penal", "acao direta de inconstitucionalidade", "acao rescisoria",
     "suspensao de seguranca", "suspensao de liminar e de sentenca", "peticao",
     "prestacao de contas", "lista triplice", "rot", "irr",
     "conflito de jurisdicao", "incompatibilidade", "correicao parcial militar"
   ],
-  "marcadores_exatos": ["apelacao", "sv", "sumula", "sumula vinculante", "airr", "rrag", "pext", "enunciado", "res", "decr", "decreto", "resolucao", "arts", "cf", "cod", "penal-militar", "cautelar inominada", "cautelar inominada criminal", "iac", "qo no iac", "acao penal", "acao direta de inconstitucionalidade", "acao rescisoria", "suspensao de seguranca", "suspensao de liminar e de sentenca", "peticao", "prestacao de contas", "lista triplice", "rot", "irr", "conflito de jurisdicao", "incompatibilidade", "correicao parcial militar",
+  "marcadores_exatos": ["apelacao", "sv", "sumula", "sumula vinculante", "airr", "rrag", "pext", "enunciado", "res", "decr", "decreto", "resolucao", "arts", "cf", "cod", "penal-militar", "cautelar inominada", "cautelar inominada criminal", "iac", "qo no iac", "incidente de assuncao de competencia", "questao de ordem no incidente de assuncao de competencia", "acao penal", "acao direta de inconstitucionalidade", "acao rescisoria", "suspensao de seguranca", "suspensao de liminar e de sentenca", "peticao", "prestacao de contas", "lista triplice", "rot", "irr", "conflito de jurisdicao", "incompatibilidade", "correicao parcial militar",
     "c l t", "c p c", "c p p", "c p m", "cpp", "cpm", "cdc", "cod de proc penal-militar", "cod de proc penal militar", "cod de proc penal", "cod de proc civil"],
 
   "siglas": ["re", "resp", "aresp", "respe", "rhc", "hc", "rse", "apl", "rms", "rr", "arr", "ar", "rp", "agarr", "rcl", "recl", "agr", "agrg", "agint", "ed", "edcl", "eds", "airr", "rrag", "rot", "irr"],
@@ -43,7 +44,7 @@
     }
   },
   "marcadores_descritivos": ["acordao", "julgado", "precedente", "reclamacao"],
-  "marcadores_numerados": ["sumula", "sum", "sumula vinculante", "tema", "sv", "enunciado", "iac", "qo no iac"],
+  "marcadores_numerados": ["sumula", "sum", "sumula vinculante", "tema", "sv", "enunciado"],
   "classes_citadas": [
     {"padrao": "\\b(?:ARESP|AGRAVO\\s+(?:EM|NO)\\s+RECURSO\\s+ESPECIAL)\\b", "classe": "agravoemrecursoespecial"},
     {"padrao": "\\b(?:RESP|RECURSO\\s+ESPECIAL)\\b", "classe": "recursoespecial"},
@@ -90,6 +91,7 @@
   "classes_genericas": {
     "apelacaocriminal": "apelacao"
   },
+  "classes_numero_curto_sem_indicador": ["incidentedeassuncaodecompetencia"],
   "modificadores_recursais": [
     {"padrao": "\\bAG\\s*INT\\b|\\bAGRAVO\\s+INTERNO\\b", "modificador": "agravo_interno"},
     {"padrao": "\\bAG\\s*RG\\b|\\bAGRAVO\\s+REGIMENTAL\\b", "modificador": "agravo_regimental"},
