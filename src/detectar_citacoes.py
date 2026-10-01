@@ -272,6 +272,86 @@ def tema_tem_identificador_juridico(indice, tokens):
     return False
 
 
+_MARCADORES_SUMULA = {"sumula", "sum", "sumula vinculante"}
+_INDICADORES_NUMERO_SUMULA = {"n", "nº", "n°", "no", "numero"}
+_CONECTORES_TRIBUNAL_SUMULA = {"do", "da", "de"}
+
+
+def _separador_continua_sumula(
+    texto_original,
+    token_anterior,
+    token_seguinte,
+    *,
+    ponto_obrigatorio=False,
+    ponto_opcional=False,
+):
+    """Valida uma transição da estrutura local de uma Súmula."""
+    separador = texto_original[token_anterior["fim"]:token_seguinte["inicio"]]
+    if separador.startswith("."):
+        if not (ponto_obrigatorio or ponto_opcional):
+            return False
+        separador = separador[1:]
+    elif ponto_obrigatorio:
+        return False
+    return re.search(r"[.,;:!?]", separador) is None
+
+
+def sumula_tem_identificador(indice, tokens, texto_original):
+    """Exige número local, com tribunal e indicador numérico opcionais."""
+    marcador = tokens[indice]
+    proximo_indice = indice + 1
+    if proximo_indice >= len(tokens):
+        return False
+
+    if not _separador_continua_sumula(
+        texto_original,
+        marcador,
+        tokens[proximo_indice],
+        ponto_obrigatorio=marcador["normalizado"] == "sum",
+    ):
+        return False
+
+    if tokens[proximo_indice]["normalizado"] in _CONECTORES_TRIBUNAL_SUMULA:
+        conector = tokens[proximo_indice]
+        proximo_indice += 1
+        if (
+            proximo_indice >= len(tokens)
+            or tokens[proximo_indice]["normalizado"] not in TRIBUNAIS
+            or not _separador_continua_sumula(
+                texto_original, conector, tokens[proximo_indice]
+            )
+        ):
+            return False
+
+    if tokens[proximo_indice]["normalizado"] in TRIBUNAIS:
+        tribunal = tokens[proximo_indice]
+        proximo_indice += 1
+        if (
+            proximo_indice >= len(tokens)
+            or not _separador_continua_sumula(
+                texto_original, tribunal, tokens[proximo_indice]
+            )
+        ):
+            return False
+
+    indicador = tokens[proximo_indice]["normalizado"]
+    if indicador in _INDICADORES_NUMERO_SUMULA:
+        token_indicador = tokens[proximo_indice]
+        proximo_indice += 1
+        if (
+            proximo_indice >= len(tokens)
+            or not _separador_continua_sumula(
+                texto_original,
+                token_indicador,
+                tokens[proximo_indice],
+                ponto_opcional=indicador == "n",
+            )
+        ):
+            return False
+
+    return re.search(r"\d", tokens[proximo_indice]["normalizado"]) is not None
+
+
 _INDICADORES_NUMERO_RESOLUCAO = {"n", "nº", "n°", "no", "numero"}
 
 
@@ -465,6 +545,11 @@ def procurar_marcadores_principais(tokens, texto_original):
         # após o marcador ou após conectores jurídicos conhecidos.
         if marcador == "tema" and not tema_tem_identificador_juridico(
             fim_indice, tokens
+        ):
+            continue
+
+        if marcador in _MARCADORES_SUMULA and not sumula_tem_identificador(
+            fim_indice, tokens, texto_original
         ):
             continue
 
