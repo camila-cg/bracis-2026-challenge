@@ -28,6 +28,9 @@ MOLDURA = "Conforme {}, decidiu-se.\n"
 
 ID_CLT_896 = 10637358
 ID_CPC_373 = 28893055
+ID_CPP_312 = 10652044
+ID_CPM_290 = 10590194
+ID_CDC_14 = 10606184
 ID_CF_93 = 10626510
 ID_SUMULA_TST_331 = 1431369957
 
@@ -69,6 +72,20 @@ class LetrasSeparadas(BaseCanonica):
 
     def test_artigo_inexistente_com_letras_separadas_continua_inventada(self):
         self.assertEqual(self.uma("o art. 99999 da C L T")["classificacao"], "inventada")
+
+
+class SiglasCompactasDeCodigos(BaseCanonica):
+    def test_sigla_compacta_entra_no_span_e_resolve(self):
+        for texto, sigla, id_esperado in (
+            ("artigo 290, caput, do CPM", "CPM", ID_CPM_290),
+            ("art. 312 do CPP", "CPP", ID_CPP_312),
+            ("art. 14 do CDC", "CDC", ID_CDC_14),
+        ):
+            with self.subTest(texto=texto):
+                c = self.uma(texto)
+                self.assertIn(sigla, c["trecho"])
+                self.assertEqual(c["classificacao"], "real")
+                self.assertEqual(c["resolucao"], {"id_canonico": str(id_esperado)})
 
 
 class Enunciado(BaseCanonica):
@@ -186,6 +203,9 @@ class GuardasContraFalsoPositivo(BaseCanonica):
             "O Proc. 123 tramita na vara cível da comarca.\n",
             "Cf. fls. 12, o réu foi citado por edital.\n",
             "Segundo o CF desta planilha, o saldo final é 12.\n",
+            "O CPM da campanha foi calculado em 12 reais.\n",
+            "O CPP do projeto tem 12 páginas.\n",
+            "O CDC do equipamento é 14.\n",
             "O decreto presidencial foi revogado cinco dias depois da publicação.\n",
         ):
             with self.subTest(texto=texto.strip()):

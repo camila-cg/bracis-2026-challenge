@@ -4,7 +4,7 @@
     "constituicao federal", "constituicao da republica", "clt", "cpc", "codigo civil",
     "processo civil", "processo penal", "defesa do consumidor", "codigo penal",
     "penal militar", "codigo eleitoral", "consolidacao das leis do trabalho", "§",
-    "c l t", "c p c", "c p p", "c p m", "decreto", "decr", "resolucao", "res", "arts", "cf", "cod", "penal-militar",
+    "c l t", "c p c", "c p p", "c p m", "cpp", "cpm", "cdc", "decreto", "decr", "resolucao", "res", "arts", "cf", "cod", "penal-militar",
     "cod de proc penal-militar", "cod de proc penal militar", "cod de proc penal", "cod de proc civil"
   ],
   "marcadores_numerados": ["art", "artigo", "§", "lei", "lei complementar", "arts", "decreto", "decr", "resolucao", "res"],
