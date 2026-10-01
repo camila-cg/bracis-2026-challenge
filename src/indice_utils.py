@@ -132,6 +132,61 @@ def normalizar_numero(bruto: str) -> str:
     return re.sub(r"[^0-9]", "", bruto)
 
 
+def _cnj_por_digitos_sem_separadores(digitos: str) -> str | None:
+    """Reconstrói um CNJ apenas quando a cauda de 13 dígitos é plausível."""
+    if not 14 <= len(digitos) <= 20:
+        return None
+    sequencial, fim = digitos[:-13], digitos[-13:]
+    ano = int(fim[2:6])
+    segmento = fim[6]
+    if not 1900 <= ano <= 2099 or segmento == "0":
+        return None
+    return f"{sequencial.zfill(7)}-{fim}"
+
+
+def _recuperar_cnj_tse(bruto: str, texto: str) -> str | None:
+    """Recupera CNJ danificado no cabeçalho quando o corpo confirma a identidade.
+
+    O parser do TSE às vezes captura um CNJ que perdeu pontos ou o DV. A função
+    não corrige só pela aparência: exige que a forma reconstruída reapareça como
+    CNJ válido no documento. Se a cauda perdeu o DV, aceita a repetição única
+    que tenha o mesmo sequencial escrito antes do hífen no cabeçalho.
+    """
+    if u.chave_cnj(bruto) is not None:
+        return None
+    digitos = re.sub(r"\D", "", bruto)
+    sequencial_bruto = re.match(r"^\s*(\d{1,7})\s*[-–—]", bruto)
+    if not sequencial_bruto or not 14 <= len(digitos) <= 20:
+        return None
+
+    texto_normalizado = u.normalizar_traco_de_cnj(
+        u.corrigir_ocr_em_numeros(texto)
+    )
+    encontrados = {
+        chave
+        for achado in u.CNJ.finditer(texto_normalizado)
+        if (chave := u.chave_cnj(achado.group())) is not None
+    }
+    sequencial = sequencial_bruto.group(1).lstrip("0") or "0"
+    candidato = _cnj_por_digitos_sem_separadores(digitos)
+    sequencial_candidato = (
+        candidato[:7].lstrip("0") or "0"
+        if candidato is not None
+        else None
+    )
+    if candidato in encontrados and sequencial_candidato == sequencial:
+        return candidato
+
+    mesmo_sequencial = {
+        chave
+        for chave in encontrados
+        if (chave[:7].lstrip("0") or "0") == sequencial
+    }
+    if len(mesmo_sequencial) == 1:
+        return next(iter(mesmo_sequencial))
+    return None
+
+
 # --------------------------------------------------------------------------- #
 # Construção do índice de acórdãos
 # --------------------------------------------------------------------------- #
@@ -192,6 +247,8 @@ def construir_indice_acordaos(con: sqlite3.Connection) -> tuple[dict, list[dict]
             sem_parser.append({"documento_id": documento_id, "id": id_canonico, "tribunal": tribunal})
             continue
         numero_norm = normalizar_numero(campos["numero"])
+        if tribunal == "TSE":
+            numero_norm = _recuperar_cnj_tse(campos["numero"], texto) or numero_norm
         classe_norm = normalizar_classe(campos["classe"])
         origem_norm = re.sub(r"[^0-9]", "", campos["origem"]) if campos["origem"] else None
         chave = (tribunal, classe_norm, numero_norm, origem_norm)
