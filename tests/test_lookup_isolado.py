@@ -1,11 +1,9 @@
 """Gate do lookup isolado (src/validacao/lookup_isolado.py)."""
 
-import sys
 import unittest
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(RAIZ / "src"))
 
 import eda_utils as u
 from validacao import lookup_isolado as li

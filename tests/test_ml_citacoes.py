@@ -6,16 +6,12 @@ import itertools
 import random
 from types import SimpleNamespace
 import json
-import sys
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
 
 import numpy as np
-
-RAIZ = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(RAIZ / "src"))
 
 from ml_citacoes.aumento import aumentar_citacao_real
 from ml_citacoes.bio import decodificar_viterbi, IGNORAR, bio_para_spans, combinar_logits_janelas, spans_para_bio

@@ -1,12 +1,10 @@
 """Acórdãos que o parser de cabeçalho não lia (TSE com encoding quebrado, TST e STM)."""
 
 import sqlite3
-import sys
 import unittest
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(RAIZ / "src"))
 
 import indice_utils as ind
 

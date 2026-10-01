@@ -13,12 +13,10 @@ guardas contra falso positivo em prosa comum.
 """
 
 import sqlite3
-import sys
 import unittest
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(RAIZ / "src"))
 
 from detectar_citacoes import criar_tokens, detectar_marcadores_e_indicios
 from pipeline import processar_documento

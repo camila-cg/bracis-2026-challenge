@@ -1,6 +1,6 @@
 """Regressões do resolvedor e pendências conhecidas do pipeline.
 
-Execute da raiz: python -m unittest discover -s tests -v
+Execute da raiz: python -m pytest tests -v
 """
 
 import csv
@@ -12,7 +12,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 RAIZ = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(RAIZ / "src"))
 
 import indice_utils as ind
 from modelos import CitacaoNormalizada

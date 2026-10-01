@@ -10,13 +10,10 @@ Pisos medidos em 30/09/2026. Melhorou: suba o piso na mesma mudança.
 
 import random
 import sqlite3
-import sys
 import unittest
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(RAIZ / "src"))
-sys.path.insert(0, str(RAIZ / "src" / "validacao"))
 
 PISO_ORIGINAL = 1.099
 PISO_RUIDO_MINIMO = 1.086   # mínimo entre as seeds do ruído abaixo
@@ -34,7 +31,7 @@ class Estresse(unittest.TestCase):
         if not (dados / "desafio1_bracis.db").is_file() or not (dados / "goldenset_offsets.csv").is_file():
             raise unittest.SkipTest("base canônica ou gabarito do dev ausentes em data/")
         import eda_utils as u
-        import estresse as e
+        from validacao import estresse as e
         import pipeline as p
 
         cls.e = e

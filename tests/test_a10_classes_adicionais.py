@@ -1,12 +1,10 @@
 """A10: classes canônicas raras que ainda não iniciavam extração."""
 
 import sqlite3
-import sys
 import unittest
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(RAIZ / "src"))
 
 from pipeline import processar_documento
 from steps.buscar_na_base import Resolvedor

@@ -1,11 +1,5 @@
 """Regressões do alinhamento interno com a métrica oficial."""
 
-import sys
-from pathlib import Path
-
-RAIZ = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(RAIZ / "src"))
-
 from detectar_citacoes import avaliar_documento
 
 

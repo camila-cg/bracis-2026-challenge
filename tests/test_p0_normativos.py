@@ -1,11 +1,8 @@
 """Regressões P0 contra falsos positivos em citações normativas."""
 
 import sqlite3
-import sys
 import unittest
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pipeline import processar_documento
 from steps.atribuir_confianca import atribuir_confianca

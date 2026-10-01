@@ -6,13 +6,11 @@ contraditória em ``real``.
 """
 
 import sqlite3
-import sys
 import unittest
 from pathlib import Path
 
 
 RAIZ = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(RAIZ / "src"))
 
 import eda_utils as u
 from pipeline import processar_documento

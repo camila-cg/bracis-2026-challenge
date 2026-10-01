@@ -1,15 +1,10 @@
 """Contrato do card 1: localizar citações nos .txt e remover distratores.
 
-Execute da raiz: python -m unittest tests/test_card_01_extracao.py -v
+Execute da raiz: python -m pytest tests/test_card_01_extracao.py -v
 Os testes usam textos pequenos e não dependem do gabarito nem da base canônica.
 """
 
-import sys
 import unittest
-from pathlib import Path
-
-RAIZ = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(RAIZ / "src"))
 
 import detectar_citacoes as detector
 from steps.extrair_candidatos import extrair

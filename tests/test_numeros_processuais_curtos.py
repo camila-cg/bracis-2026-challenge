@@ -1,12 +1,10 @@
 """A15: números processuais de 1–2 dígitos em contexto jurídico forte."""
 
 import sqlite3
-import sys
 import unittest
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(RAIZ / "src"))
 
 from pipeline import processar_documento
 from steps.buscar_na_base import Resolvedor

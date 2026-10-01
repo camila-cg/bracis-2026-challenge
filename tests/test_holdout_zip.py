@@ -2,13 +2,11 @@
 
 import contextlib
 import io
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(RAIZ / "src"))
 
 import eda_utils as u
 import pipeline as p

@@ -1,11 +1,9 @@
 """Gate do teste da base inteira (src/validacao/teste_base_inteira.py)."""
 
-import sys
 import unittest
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(RAIZ / "src"))
 
 import eda_utils as u
 from validacao import teste_base_inteira as t
