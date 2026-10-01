@@ -41,6 +41,9 @@ COMPOSICAO_NOME = set(_DIPLOMAS["composicao_nome"])
 MARCADORES_DESCRITIVOS = set(_CLASSES["marcadores_descritivos"])
 MARCADORES_NUMERADOS = set(_CLASSES["marcadores_numerados"])
 MARCADORES_LEGAIS_NUMERADOS = set(_DIPLOMAS["marcadores_numerados"])
+ORGAOS_EMISSORES_RESOLUCAO = (
+    TRIBUNAIS | set(_DIPLOMAS.get("orgaos_emissores_resolucao", []))
+)
 SIGLAS = set(_CLASSES["siglas"])
 SIGLAS_CLASSES_AMBIGUAS = _CLASSES.get("siglas_classes_ambiguas", {})
 MARCADORES_EXATOS = set(_CLASSES.get("marcadores_exatos", []))
@@ -261,6 +264,83 @@ def tema_tem_identificador_juridico(indice, tokens):
                 return True
     return False
 
+
+_INDICADORES_NUMERO_RESOLUCAO = {"n", "nº", "n°", "no", "numero"}
+
+
+def _token_e_orgao_emissor_resolucao(token):
+    """Reconhece emissores conhecidos e outras siglas institucionais."""
+    if token["normalizado"] in ORGAOS_EMISSORES_RESOLUCAO:
+        return True
+    return re.fullmatch(r"[A-Z]{2,8}(?:-\d+)?", token["original"]) is not None
+
+
+def _separador_continua_resolucao(
+    texto_original, token_anterior, token_seguinte, *, abreviacao=False
+):
+    """Impede que a estrutura da resolução atravesse pontuação."""
+    separador = texto_original[token_anterior["fim"]:token_seguinte["inicio"]]
+    if abreviacao:
+        # O ponto de ``Res.`` pertence ao marcador, não encerra a citação.
+        if not separador.startswith("."):
+            return False
+        separador = separador[1:]
+    return re.search(r"[.,;:!?]", separador) is None
+
+
+def resolucao_tem_identificador(indice, tokens, texto_original):
+    """Valida ``Res./Resolução + emissor? + nº? + identificador``.
+
+    Sem introdutor de número, exige um identificador com barra para não
+    transformar um número solto em prosa em ato normativo.
+    """
+    marcador = tokens[indice]
+    abreviacao = marcador["normalizado"] == "res"
+    proximo_indice = indice + 1
+    if proximo_indice >= len(tokens):
+        return False
+
+    if not _separador_continua_resolucao(
+        texto_original,
+        marcador,
+        tokens[proximo_indice],
+        abreviacao=abreviacao,
+    ):
+        return False
+
+    if _token_e_orgao_emissor_resolucao(tokens[proximo_indice]):
+        anterior = tokens[proximo_indice]
+        proximo_indice += 1
+        if (
+            proximo_indice >= len(tokens)
+            or not _separador_continua_resolucao(
+                texto_original, anterior, tokens[proximo_indice]
+            )
+        ):
+            return False
+
+    tem_indicador = (
+        tokens[proximo_indice]["normalizado"]
+        in _INDICADORES_NUMERO_RESOLUCAO
+    )
+    if tem_indicador:
+        anterior = tokens[proximo_indice]
+        proximo_indice += 1
+        if (
+            proximo_indice >= len(tokens)
+            or not _separador_continua_resolucao(
+                texto_original, anterior, tokens[proximo_indice]
+            )
+        ):
+            return False
+
+    identificador = tokens[proximo_indice]["normalizado"]
+    if re.fullmatch(r"[0-9o]+(?:[./-][0-9o]+)*", identificador) is None:
+        return False
+    if not re.search(r"\d", identificador):
+        return False
+    return tem_indicador or "/" in identificador
+
 #siglas ambíguas nao viram marcadores principais
 def procurar_classes_processuais_ambiguas(tokens):
     classes = []
@@ -302,7 +382,7 @@ def procurar_classes_processuais_ambiguas(tokens):
 _OCR_DE_LEI = {"le1", "lel"}
 
 
-def procurar_marcadores_principais(tokens):
+def procurar_marcadores_principais(tokens, texto_original):
     marcadores_principais = []
     intervalos_usados = set()
 
@@ -378,6 +458,11 @@ def procurar_marcadores_principais(tokens):
         # após o marcador ou após conectores jurídicos conhecidos.
         if marcador == "tema" and not tema_tem_identificador_juridico(
             fim_indice, tokens
+        ):
+            continue
+
+        if marcador in {"res", "resolucao"} and not resolucao_tem_identificador(
+            fim_indice, tokens, texto_original
         ):
             continue
 
@@ -567,7 +652,7 @@ def procurar_orgaos_julgadores(tokens):
 #essa já foi revisada, está ok
 def detectar_marcadores_e_indicios(texto_original, tokens):
     registros = []
-    registros.extend(procurar_marcadores_principais(tokens))
+    registros.extend(procurar_marcadores_principais(tokens, texto_original))
     registros.extend(procurar_classes_processuais_ambiguas(tokens))
     registros.extend(procurar_numeros(tokens))
     registros.extend(procurar_tribunais_e_ufs(tokens))

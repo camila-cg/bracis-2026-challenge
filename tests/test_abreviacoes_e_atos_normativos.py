@@ -20,6 +20,7 @@ from pathlib import Path
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "src"))
 
+from detectar_citacoes import criar_tokens, detectar_marcadores_e_indicios
 from pipeline import processar_documento
 from steps.buscar_na_base import Resolvedor
 
@@ -112,6 +113,41 @@ class AtosNormativosForaDoCatalogo(BaseCanonica):
         c = self.uma("o art. 896 do Decreto-Lei nº 5.452/1943")
         self.assertEqual(c["classificacao"], "real")
         self.assertEqual(c["resolucao"], {"id_canonico": str(ID_CLT_896)})
+
+
+class EstruturaResolucao(unittest.TestCase):
+    def marcadores_resolucao(self, texto: str) -> list[dict]:
+        tokens = criar_tokens(texto)
+        registros = detectar_marcadores_e_indicios(texto, tokens)
+        return [
+            registro
+            for registro in registros
+            if registro["tipo_registro"] == "marcador_principal"
+            and registro.get("marcador") in {"res", "resolucao"}
+        ]
+
+    def test_aceita_resolucao_com_identificador_estruturado(self):
+        for texto in (
+            "Res. CNJ nº 455, de 27-4-2022",
+            "Resolução TSE nº 23.610/2019",
+            "Resolução ANEEL nº 12",
+            "Resolução nº 455/2022",
+            "Resolução 400/2021",
+        ):
+            with self.subTest(texto=texto):
+                self.assertEqual(len(self.marcadores_resolucao(texto)), 1)
+
+    def test_rejeita_resolucao_sem_estrutura_normativa(self):
+        for texto in (
+            "A res judicata foi examinada no processo nº 455.",
+            "A resolução do conflito recebeu o nº 455.",
+            "A Res. conflito nº 455 foi publicada.",
+            "A Resolução, CNJ nº 455 foi publicada.",
+            "A Resolução CNJ, nº 455 foi publicada.",
+            "A resolução 12 do problema foi apresentada.",
+        ):
+            with self.subTest(texto=texto):
+                self.assertEqual(self.marcadores_resolucao(texto), [])
 
 
 class DiplomaAntesDoArtigo(BaseCanonica):
