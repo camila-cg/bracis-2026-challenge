@@ -134,6 +134,56 @@ class OffsetsEQuebrasDeLinha(unittest.TestCase):
             [texto],
         )
 
+    def test_recompoe_acordao_descritivo_do_mesmo_processo(self):
+        citacao = (
+            "acórdão da Segunda Turma do STJ no Recurso Especial "
+            "2.014.778/SC, julgado em 16 de maio de 2023, "
+            "rel. Min. Assusete Magalhães"
+        )
+        texto = f"Segundo o {citacao}, a controvérsia foi delimitada."
+
+        self.assertEqual(
+            [item["trecho"] for item in candidatos(texto)],
+            [citacao],
+        )
+
+    def test_acordao_descritivo_nao_engole_outro_julgado(self):
+        texto = (
+            "O acórdão da Segunda Turma do STJ no Recurso Especial "
+            "2.014.778/SC, outro julgado no Recurso Especial "
+            "3.000.000/PR, julgado em 20 de junho de 2024, "
+            "rel. Min. Maria Silva."
+        )
+
+        encontrados = candidatos(texto)
+        self.assertFalse(
+            any(
+                "2.014.778/SC" in item["trecho"]
+                and "3.000.000/PR" in item["trecho"]
+                for item in encontrados
+            )
+        )
+
+    def test_recomposicao_descritiva_nao_atravessa_fronteira_forte(self):
+        prefixo = (
+            "O acórdão da Segunda Turma do STJ no Recurso Especial "
+            "2.014.778/SC"
+        )
+        complemento = (
+            "julgado em 16 de maio de 2023, "
+            "rel. Min. Assusete Magalhães"
+        )
+        for separador in (". ", "; ", ", e ", ", bem como "):
+            with self.subTest(separador=separador):
+                texto = prefixo + separador + complemento + "."
+                self.assertFalse(
+                    any(
+                        item["trecho"].startswith("acórdão")
+                        and "Assusete Magalhães" in item["trecho"]
+                        for item in candidatos(texto)
+                    )
+                )
+
     def test_inciso_encerra_citacao_antes_de_controles_da_frase_seguinte(self):
         texto = (
             "A providência observa a Res. CNJ nº 455, de 27-4-2022, bem como "

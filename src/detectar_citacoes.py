@@ -1178,6 +1178,119 @@ def nova_fonte_coordenada(texto_original, grupo_atual, registro_atual):
         re.IGNORECASE,
     ) is not None
 
+
+def _tipos_do_grupo(grupo):
+    return {registro["tipo_registro"] for registro in grupo}
+
+
+def _marcadores_do_grupo(grupo):
+    return {
+        registro.get("marcador")
+        for registro in grupo
+        if registro["tipo_registro"] == "marcador_principal"
+    }
+
+
+def _numeros_processuais_distintos(grupo):
+    return {
+        (registro["inicio"], registro["fim"])
+        for registro in grupo
+        if registro["tipo_registro"] == "numero_processual"
+    }
+
+
+def _forma_acordao_descritivo(texto_original, cabecalho, processo, julgamento):
+    """Confirma que três grupos descrevem inequivocamente um único acórdão.
+
+    A recomposição é deliberadamente estrita: não relaxa a distância geral
+    entre marcadores e não atravessa prosa, conjunção ou pontuação forte.
+    """
+    tipos_cabecalho = _tipos_do_grupo(cabecalho)
+    tipos_processo = _tipos_do_grupo(processo)
+    tipos_julgamento = _tipos_do_grupo(julgamento)
+
+    cabecalho_identificavel = (
+        "acordao" in _marcadores_do_grupo(cabecalho)
+        and "orgao_julgador" in tipos_cabecalho
+        and "tribunal" in tipos_cabecalho
+        and not (tipos_cabecalho & _REGISTROS_NUMERICOS)
+        and "classe_processual" not in tipos_cabecalho
+    )
+
+    numeros_processo = _numeros_processuais_distintos(processo)
+    ufs_processo = {
+        (registro["inicio"], registro["fim"])
+        for registro in processo
+        if registro["tipo_registro"] == "uf"
+    }
+    tem_classe_ou_marcador_jurisprudencial = any(
+        registro["tipo_registro"] in {
+            "marcador_principal", "classe_processual",
+        }
+        and registro.get("categoria") == "jurisprudencia"
+        for registro in processo
+    )
+    processo_identificavel = (
+        len(numeros_processo) == 1
+        and numeros_processo == ufs_processo
+        and tem_classe_ou_marcador_jurisprudencial
+        and "tribunal" not in tipos_processo
+    )
+
+    marcadores_julgamento = _marcadores_do_grupo(julgamento)
+    julgamento_identificavel = (
+        marcadores_julgamento == {"julgado"}
+        and "ano" in tipos_julgamento
+        and "relatoria" in tipos_julgamento
+        and "nome_proprio" in tipos_julgamento
+        and not (
+            tipos_julgamento
+            & {"numero_processual", "uf", "tribunal", "classe_processual"}
+        )
+    )
+
+    ligacao_processo = texto_original[
+        cabecalho[-1]["fim"]:processo[0]["inicio"]
+    ]
+    ligacao_julgamento = texto_original[
+        processo[-1]["fim"]:julgamento[0]["inicio"]
+    ]
+
+    return (
+        cabecalho_identificavel
+        and processo_identificavel
+        and julgamento_identificavel
+        and re.fullmatch(
+            r"\s*(?:no|na|nos|nas)\s+", ligacao_processo, re.IGNORECASE
+        ) is not None
+        and re.fullmatch(r"\s*,\s*", ligacao_julgamento) is not None
+    )
+
+
+def recompor_acordaos_descritivos(texto_original, grupos):
+    """Reúne apenas a cadeia ``acórdão ... no processo ..., julgado ...``."""
+    recompostos = []
+    indice = 0
+    while indice < len(grupos):
+        if (
+            indice + 2 < len(grupos)
+            and _forma_acordao_descritivo(
+                texto_original,
+                grupos[indice],
+                grupos[indice + 1],
+                grupos[indice + 2],
+            )
+        ):
+            recompostos.append(
+                grupos[indice] + grupos[indice + 1] + grupos[indice + 2]
+            )
+            indice += 3
+            continue
+
+        recompostos.append(grupos[indice])
+        indice += 1
+    return recompostos
+
 #revisada, mas talvez tenhamos que mexer em algumas heurísticas futuramente
 def agrupar_registros(texto_original, registros):
     grupos = []
@@ -1248,7 +1361,7 @@ def agrupar_registros(texto_original, registros):
     #salva o último grupo
     if grupo_atual:
         grupos.append(grupo_atual)
-    return grupos
+    return recompor_acordaos_descritivos(texto_original, grupos)
 
 
 def parece_jurisprudencia_sem_marcador(grupo):
