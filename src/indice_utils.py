@@ -76,6 +76,17 @@ TSE_CABECALHO = re.compile(
     re.UNICODE,
 )
 
+# Alguns cabeçalhos do TSE têm o encoding quebrado (Ó, º e Ç viram €, ‚ e ƒ), o
+# que impede TSE_CABECALHO. O CNJ completo continua legível; a classe só entra
+# se estiver em maiúsculas puras e o número fecha o CNJ (com DV) até a "CLASSE".
+# A UF só vale quando o nome do estado está legível; com acento quebrado fica None.
+TSE_CABECALHO_ENCODING_QUEBRADO = re.compile(
+    r"TRIBUNAL\s+SUPERIOR\s+ELEITORAL\s+AC\S{1,2}RD\s?\S{0,2}\s+"
+    r"(?P<classe>[A-Z][A-Z\s]+?)\s+N\S?\s*"
+    r"(?P<numero>\d{1,7}-\d{2}\.\s?\d{4}\.\d\.\d{2}\.\d{4})\s*-?\s*CLASSE\s*\d+\S?"
+    r"(?:\s+[^-]*?-\s*(?P<uf>[A-Za-z\s]+?)\s+Relator)?",
+)
+
 # Uma fração dos acórdãos do TSE vem como página de andamento processual
 # ("Número: ... Classe: ... Órgão julgador...") em vez do cabeçalho de
 # acórdão de verdade — layout completamente diferente, regex à parte.
@@ -89,16 +100,29 @@ TSE_ANDAMENTO = re.compile(
 # "Vistos, relatados e discutidos estes autos de <classe> nº TST-<código>-
 # <número CNJ>, em que é...". Às vezes vem com espaço em volta dos hifens.
 TST_FORMULA = re.compile(
-    r"n[ºo°]\s*(?P<raw>TST[\s\-A-Za-z0-9./]{5,60}?\d{2}\.\d{4}\.5\.\d{2}\.\d{4})",
+    r"n\s*\.?\s*(?:[ºo°]|[^\sA-Za-z0-9])?\s*(?P<raw>TST[\s\-A-Za-z0-9./]{5,60}?\d{2}\.\d{4}\.5\.\d{2}\.\d{4})",
     re.UNICODE | re.DOTALL,
 )
 TST_NUMERO = re.compile(r"^TST-(?P<codigo>[A-Za-z-]+)-(?P<numero>\d+-\d{2}\.\d{4}\.5\.\d{2}\.\d{4})$")
+
+# O extrato de ata do STM pode empurrar o título do processo para além dos 500
+# caracteres do cabeçalho, e o sequencial dos processos antigos é curto
+# ("APELAÇÃO Nº 234-73.2016.7.11.0211/DF"). Só vale se o mesmo número repete no
+# documento (cabeçalho de página), o que o distingue de um processo apenas citado.
+STM_CABECALHO_CURTO = re.compile(
+    r"(?P<classe>[A-ZÇÃÕÁÉÍÓÚÂÊÔ][A-ZÇÃÕÁÉÍÓÚÂÊÔ]+)\s+"
+    r"N[ºo°]\s*(?P<numero>\d{1,7}-\d{2}\.\d{4}\.7\.\d{2}\.\d{4})"
+    r"(?:\s*[-/]\s*(?P<uf>[A-Z]{2})\b)?",
+    re.UNICODE,
+)
+STM_JANELA_CURTO = 3000
+STM_REPETICOES_MINIMAS = 3
 
 PARSERS = {
     "STF": [STF_CABECALHO],
     "STJ": [STJ_CABECALHO],
     "STM": [STM_CABECALHO],
-    "TSE": [TSE_CABECALHO, TSE_ANDAMENTO],
+    "TSE": [TSE_CABECALHO, TSE_CABECALHO_ENCODING_QUEBRADO, TSE_ANDAMENTO],
 }
 
 UF_POR_EXTENSO = carregar_config("tribunais")["uf_por_extenso"]
@@ -216,6 +240,15 @@ def parsear_cabecalho(tribunal: str, texto: str) -> dict | None:
                 "numero": m.group("numero"),
                 "uf": m.group("uf") if "uf" in padrao.groupindex else None,
                 "origem": m.group("origem") if "origem" in padrao.groupindex else None,
+            }
+    if tribunal == "STM":
+        m = STM_CABECALHO_CURTO.search(texto[:STM_JANELA_CURTO])
+        if m and texto.count(m.group("numero")) >= STM_REPETICOES_MINIMAS:
+            return {
+                "classe": m.group("classe"),
+                "numero": m.group("numero"),
+                "uf": m.group("uf"),
+                "origem": None,
             }
     return None
 

@@ -62,20 +62,33 @@ class ResolucaoAcordaos(unittest.TestCase):
             self.assertEqual(self.resolvedor.acordao("REsp 1.741.784/SC")[:2], ("inventada", None))
 
     def test_fallback_sem_parser_nao_aceita_classe_ou_uf_como_curinga(self):
-        for trecho in (
-            "Habeas Corpus nº 184-70.2012.6.20.0033 do TSE",
-            "Recurso Especial Eleitoral nº 184-70.2012.6.20.0033/SP do TSE",
-            "Habeas Corpus nº 310-03.2012.6.09.0074 do TSE",
-        ):
-            with self.subTest(trecho=trecho):
-                resultado = self.resolvedor.resolver_citacao(normalizar_citacao(
-                    {"trecho": trecho, "inicio": 0, "fim": len(trecho)},
-                    "acordao",
-                    ja_normalizado=True,
-                ))
-                self.assertEqual(resultado.classe, "incompleta")
-                self.assertEqual(resultado.caminho, "acordao_ambigua")
-                self.assertEqual(resultado.motivo, "metadados_nao_verificaveis")
+        # Os dois acórdãos do TSE abaixo já têm parser. Para continuar
+        # cobrindo o fallback, o parser é desligado para eles, como se o OCR do
+        # cabeçalho ainda os tornasse ilegíveis.
+        numeros_sem_parser = ("184-70.2012.6.20.0033", "310-03.2012.6.09.0074")
+        parsear = ind.parsear_cabecalho
+
+        def sem_parser_para_eles(tribunal, texto):
+            if any(numero in texto[:600] for numero in numeros_sem_parser):
+                return None
+            return parsear(tribunal, texto)
+
+        with patch.object(ind, "parsear_cabecalho", side_effect=sem_parser_para_eles):
+            resolvedor = Resolvedor(self.con)
+            for trecho in (
+                "Habeas Corpus nº 184-70.2012.6.20.0033 do TSE",
+                "Recurso Especial Eleitoral nº 184-70.2012.6.20.0033/SP do TSE",
+                "Habeas Corpus nº 310-03.2012.6.09.0074 do TSE",
+            ):
+                with self.subTest(trecho=trecho):
+                    resultado = resolvedor.resolver_citacao(normalizar_citacao(
+                        {"trecho": trecho, "inicio": 0, "fim": len(trecho)},
+                        "acordao",
+                        ja_normalizado=True,
+                    ))
+                    self.assertEqual(resultado.classe, "incompleta")
+                    self.assertEqual(resultado.caminho, "acordao_ambigua")
+                    self.assertEqual(resultado.motivo, "metadados_nao_verificaveis")
 
     def test_estagio_recursal_desempata_colisao_de_numero(self):
         # 1.599.372/PR tem dois acórdãos reais no mesmo tribunal/UF/classe
