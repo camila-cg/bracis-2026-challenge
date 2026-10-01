@@ -173,6 +173,54 @@ class TiposDeCitacao(unittest.TestCase):
                 encontrados = candidatos("Aplica-se " + trecho + ".")
                 self.assertTrue(any(item["tipo"] == "lei" for item in encontrados))
 
+    def test_novo_diploma_coordenado_inicia_outro_span(self):
+        casos = (
+            (
+                "Cód. de Proc. Penal-Militar, art. 5º, inc. II e o "
+                "Decr. 9.83O, de 1O/6/2O19",
+                [
+                    "Cód. de Proc. Penal-Militar, art. 5º, inc. II",
+                    "Decr. 9.83O, de 1O/6/2O19",
+                ],
+            ),
+            (
+                "Cód. de Proc. Penal-Militar, art. 5º, inciso II bem como o "
+                "Decreto 9.830/2019",
+                [
+                    "Cód. de Proc. Penal-Militar, art. 5º, inciso II",
+                    "Decreto 9.830/2019",
+                ],
+            ),
+            (
+                "Cód. de Proc. Penal-Militar, art. 5º, inciso II; "
+                "Decreto 9.830/2019",
+                [
+                    "Cód. de Proc. Penal-Militar, art. 5º, inciso II",
+                    "Decreto 9.830/2019",
+                ],
+            ),
+        )
+        for texto, esperado in casos:
+            with self.subTest(texto=texto):
+                self.assertEqual(
+                    [item["trecho"] for item in candidatos(texto)],
+                    esperado,
+                )
+
+    def test_estruturas_do_mesmo_diploma_permanecem_no_mesmo_span(self):
+        casos = (
+            "arts. 5º e 7º da Constituição",
+            "art. 5º e art. 7º da Constituição",
+            "art. 5º, incisos I e II do Código Penal",
+            "art. 5º, alínea a, do Código Penal",
+        )
+        for texto in casos:
+            with self.subTest(texto=texto):
+                self.assertEqual(
+                    [item["trecho"] for item in candidatos(texto)],
+                    [texto],
+                )
+
     def test_marcador_isolado_nao_basta(self):
         for texto in ("O recurso foi apresentado.", "A lei foi debatida.", "O artigo é relevante."):
             with self.subTest(texto=texto):

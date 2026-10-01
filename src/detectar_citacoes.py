@@ -44,6 +44,9 @@ MARCADORES_LEGAIS_NUMERADOS = set(_DIPLOMAS["marcadores_numerados"])
 ORGAOS_EMISSORES_RESOLUCAO = (
     TRIBUNAIS | set(_DIPLOMAS.get("orgaos_emissores_resolucao", []))
 )
+MARCADORES_NOVO_DIPLOMA = {
+    "lei", "lei complementar", "decreto", "decr", "resolucao", "res",
+}
 SIGLAS = set(_CLASSES["siglas"])
 SIGLAS_CLASSES_AMBIGUAS = _CLASSES.get("siglas_classes_ambiguas", {})
 MARCADORES_EXATOS = set(_CLASSES.get("marcadores_exatos", []))
@@ -558,6 +561,66 @@ def procurar_numeros(tokens):
     return indicios
 
 
+_MARCADORES_ARTIGO = {"art", "artigo", "arts", "§"}
+_QUALIFICADORES_INCISO = {"inc", "inciso", "incisos"}
+_QUALIFICADORES_ALINEA = {"alinea", "alineas"}
+_NUMERO_ROMANO = re.compile(r"[ivxlcdm]+")
+
+
+def procurar_qualificadores_legais(texto_original, tokens):
+    """Preserva incisos e alíneas explícitos no fim de uma citação legal."""
+    registros = []
+    for indice, token in enumerate(tokens):
+        qualificador = token["normalizado"]
+        if qualificador not in (_QUALIFICADORES_INCISO | _QUALIFICADORES_ALINEA):
+            continue
+
+        contexto = tokens[max(0, indice - 5):indice]
+        tem_artigo = any(
+            item["normalizado"] in _MARCADORES_ARTIGO for item in contexto
+        )
+        tem_numero = any(
+            re.search(r"\d", item["normalizado"]) is not None
+            for item in contexto
+        )
+        if not (tem_artigo and tem_numero) or indice + 1 >= len(tokens):
+            continue
+
+        if indice > 0:
+            separador = texto_original[tokens[indice - 1]["fim"]:token["inicio"]]
+            if re.search(r"[;!?]|\.\s*$", separador):
+                continue
+
+        aceita_valor = (
+            (qualificador in _QUALIFICADORES_INCISO
+             and _NUMERO_ROMANO.fullmatch(tokens[indice + 1]["normalizado"]))
+            or
+            (qualificador in _QUALIFICADORES_ALINEA
+             and re.fullmatch(r"[a-z]", tokens[indice + 1]["normalizado"]))
+        )
+        if not aceita_valor:
+            continue
+
+        fim_indice = indice + 1
+        while fim_indice + 2 < len(tokens):
+            conector = tokens[fim_indice + 1]["normalizado"]
+            proximo = tokens[fim_indice + 2]["normalizado"]
+            if conector != "e":
+                break
+            if qualificador in _QUALIFICADORES_INCISO:
+                if _NUMERO_ROMANO.fullmatch(proximo) is None:
+                    break
+            elif re.fullmatch(r"[a-z]", proximo) is None:
+                break
+            fim_indice += 2
+
+        registros.append(criar_registro(
+            "qualificador_legal", indice, fim_indice, tokens, 0,
+            valor=texto_original[token["inicio"]:tokens[fim_indice]["fim"]],
+        ))
+    return registros
+
+
 def procurar_tribunais_e_ufs(tokens):
     indicios = []
 
@@ -685,6 +748,7 @@ def detectar_marcadores_e_indicios(texto_original, tokens):
     registros.extend(procurar_marcadores_principais(tokens, texto_original))
     registros.extend(procurar_classes_processuais_ambiguas(tokens))
     registros.extend(procurar_numeros(tokens))
+    registros.extend(procurar_qualificadores_legais(texto_original, tokens))
     registros.extend(procurar_tribunais_e_ufs(tokens))
     registros.extend(procurar_orgaos_julgadores(tokens))
     registros.extend(procurar_relatorias_e_nomes(texto_original, tokens))
@@ -758,6 +822,36 @@ def numero_comeca_nova_frase(
         and _FIM_DE_FRASE_APOS_REGISTRO.match(separador) is not None
     )
 
+
+def novo_diploma_coordenado(texto_original, grupo_atual, registro_atual):
+    """Separa fontes normativas ligadas por ``e`` ou ``bem como``."""
+    if (
+        registro_atual.get("tipo_registro") != "marcador_principal"
+        or registro_atual.get("categoria") != "lei"
+        or registro_atual.get("marcador") not in MARCADORES_NOVO_DIPLOMA
+    ):
+        return False
+
+    marcadores_lei = {
+        item.get("marcador")
+        for item in grupo_atual
+        if item.get("tipo_registro") == "marcador_principal"
+        and item.get("categoria") == "lei"
+    }
+    tem_numero = any(
+        item["tipo_registro"] in {"numero_processual", "numero_legal"}
+        for item in grupo_atual
+    )
+    if not (marcadores_lei & MARCADORES_LEGAIS_NUMERADOS) or not tem_numero:
+        return False
+
+    separador = texto_original[grupo_atual[-1]["fim"]:registro_atual["inicio"]]
+    return re.search(
+        r"\b(?:e|bem\s+como)\s+(?:(?:o|a|os|as)\s+)?$",
+        separador,
+        re.IGNORECASE,
+    ) is not None
+
 #revisada, mas talvez tenhamos que mexer em algumas heurísticas futuramente
 def agrupar_registros(texto_original, registros):
     grupos = []
@@ -812,9 +906,12 @@ def agrupar_registros(texto_original, registros):
         numero_em_nova_frase = numero_comeca_nova_frase(
             texto_original, grupo_atual, anterior, registro
         )
+        novo_diploma = novo_diploma_coordenado(
+            texto_original, grupo_atual, registro
+        )
 
         #outra heurística que talvez precise ser ajustada para generalização
-        if (distancia <= _PIPELINE["distancia_maxima_grupo"] and tamanho_grupo <= _PIPELINE["tamanho_maximo_grupo"] and not novo_marcador_distante and not novo_marcador_categoria_diferente and not nova_sv_apos_citacao_numerada and not numero_em_nova_frase and not limite_entre_citacoes(texto_original, anterior, registro)):
+        if (distancia <= _PIPELINE["distancia_maxima_grupo"] and tamanho_grupo <= _PIPELINE["tamanho_maximo_grupo"] and not novo_marcador_distante and not novo_marcador_categoria_diferente and not nova_sv_apos_citacao_numerada and not numero_em_nova_frase and not novo_diploma and not limite_entre_citacoes(texto_original, anterior, registro)):
             grupo_atual.append(registro)
         else:
             grupos.append(grupo_atual)
