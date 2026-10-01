@@ -167,6 +167,14 @@ _IDENTIDADES_NUMERADAS = {
     tuple(chave.split("/", 1)): diploma
     for chave, diploma in _CONFIG_DIPLOMAS["identidade_numerada_estatuto"].items()
 }
+# Leis conhecidas pelo nome e ausentes da base (``LGPD``, ``Lei Maria da
+# Penha``): o apelido vale como o número/ano da lei, para que ``art. 7º da
+# LGPD`` seja classificado igual a ``art. 7º da Lei nº 13.709/2018``.
+_IDENTIDADE_POR_APELIDO = {
+    apelido: tuple(chave.split("/", 1))
+    for chave, apelidos in _CONFIG_DIPLOMAS["identidade_por_apelido_fora_da_base"].items()
+    for apelido in apelidos
+}
 
 
 def _numero_apos(trecho: str, palavra: re.Pattern) -> str | None:
@@ -384,15 +392,26 @@ def _normalizar_lexico(texto: str) -> str:
     return re.sub(r"\s+", " ", sem_acento.lower()).strip()
 
 
-def _diploma(trecho: str) -> str | None:
+def _apelido_mais_longo(trecho: str, apelidos_por_valor):
     texto = _normalizar_lexico(trecho)
     correspondencias = []
-    for nome, apelidos in _APELIDOS.items():
+    for valor, apelidos in apelidos_por_valor:
         for apelido in apelidos:
             alias = _normalizar_lexico(apelido)
             if alias and re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", texto):
-                correspondencias.append((len(alias), nome))
+                correspondencias.append((len(alias), valor))
     return max(correspondencias, default=(0, None))[1]
+
+
+def _diploma(trecho: str) -> str | None:
+    return _apelido_mais_longo(trecho, _APELIDOS.items())
+
+
+def _identidade_por_apelido(trecho: str) -> tuple[str, str] | None:
+    return _apelido_mais_longo(
+        trecho,
+        ((identidade, [apelido]) for apelido, identidade in _IDENTIDADE_POR_APELIDO.items()),
+    )
 
 
 def _artigo(trecho: str, contexto_esquerda: str = "") -> str | None:
@@ -481,6 +500,10 @@ def _dados_lei(trecho: str) -> tuple[str | None, str | None, str | None, bool | 
     diploma_nomeado = _diploma(trecho)
     identidades = _identidades_lei(trecho)
     if not identidades:
+        apelido = None if diploma_nomeado else _identidade_por_apelido(trecho)
+        if apelido:
+            numero, ano = apelido
+            return None, numero, ano, False, True
         return diploma_nomeado, None, None, None, False
 
     diplomas_numerados = [

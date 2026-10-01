@@ -261,12 +261,12 @@ class IdentidadeLegalEstruturada(unittest.TestCase):
                 (
                     "O art. 2 da Lei Maria da Penha foi invocado.",
                     "art. 2 da Lei Maria da Penha",
-                    "incompleta",
+                    "inventada",
                 ),
                 (
                     "O art. 3 da Lei Geral de Proteção de Dados foi citado.",
                     "art. 3 da Lei Geral de Proteção de Dados",
-                    "incompleta",
+                    "inventada",
                 ),
                 (
                     "O art. 1 da Lei de Murphy. Aplica-se a regra.",
@@ -279,6 +279,54 @@ class IdentidadeLegalEstruturada(unittest.TestCase):
                     self.assertEqual(len(citacoes), 1)
                     self.assertEqual(citacoes[0]["trecho"], trecho_esperado)
                     self.assertEqual(citacoes[0]["classificacao"], classe_esperada)
+
+    def test_lei_conhecida_pelo_apelido_segue_a_forma_numerada(self):
+        # A lei existe, mas não está na base: com artigo, o dispositivo não tem
+        # registro e a classe é a mesma de ``art. N da Lei nº X/AAAA``.
+        banco = Path(__file__).resolve().parents[1] / "data" / "desafio1_bracis.db"
+        if not banco.is_file():
+            self.skipTest("base canônica ausente")
+        with sqlite3.connect(banco.as_uri() + "?immutable=1", uri=True) as con:
+            resolvedor = Resolvedor(con)
+            for texto, trecho_esperado in (
+                ("Nos termos do art. 7º da LGPD, exige-se base legal.", "art. 7º da LGPD"),
+                ("Nos termos do art. 7º da Lei nº 13.709/2018, exige-se base legal.",
+                 "art. 7º da Lei nº 13.709/2018"),
+                ("Conforme o art. 3º do ECA, a criança goza de direitos.", "art. 3º do ECA"),
+                ("Conforme o art. 3º do Estatuto da Criança e do Adolescente, há direitos.",
+                 "art. 3º do Estatuto da Criança e do Adolescente"),
+                ("Conforme o art. 121 do Código Penal, há crime.", "art. 121 do Código Penal"),
+                ("Nos termos do art. 186 do CTN, o crédito prefere.", "art. 186 do CTN"),
+                ("O art. 19 do Marco Civil da Internet trata do tema.",
+                 "art. 19 do Marco Civil da Internet"),
+            ):
+                with self.subTest(texto=texto):
+                    citacoes = processar_documento("sintetico", texto, resolvedor)["citacoes"]
+                    self.assertEqual(len(citacoes), 1)
+                    self.assertEqual(citacoes[0]["trecho"], trecho_esperado)
+                    self.assertEqual(citacoes[0]["classificacao"], "inventada")
+            for texto in (
+                "Conforme o art. 290 do Código Penal Militar, há crime.",
+                "Conforme o art. 14 do Código de Defesa do Consumidor, o fornecedor responde.",
+            ):
+                with self.subTest(texto=texto):
+                    citacoes = processar_documento("sintetico", texto, resolvedor)["citacoes"]
+                    self.assertEqual([c["classificacao"] for c in citacoes], ["real"])
+
+    def test_pipeline_nao_detecta_apelido_de_lei_sem_artigo(self):
+        banco = Path(__file__).resolve().parents[1] / "data" / "desafio1_bracis.db"
+        if not banco.is_file():
+            self.skipTest("base canônica ausente")
+        with sqlite3.connect(banco.as_uri() + "?immutable=1", uri=True) as con:
+            resolvedor = Resolvedor(con)
+            for texto in (
+                "A LGPD determina o tratamento adequado dos dados.",
+                "A Lei Maria da Penha protege a mulher.",
+                "O ECA protege a criança.",
+                "Aplica-se a Lei Carolina Dieckmann ao caso.",
+            ):
+                with self.subTest(texto=texto):
+                    self.assertEqual(processar_documento("sintetico", texto, resolvedor)["citacoes"], [])
 
     def test_pipeline_nao_detecta_lei_nomeada_sem_artigo(self):
         banco = Path(__file__).resolve().parents[1] / "data" / "desafio1_bracis.db"
