@@ -2,7 +2,8 @@
 
 Cobre `C L T`/`C P C` (letras separadas), `Enunciado`, `Decreto`/`Decr.`/`Res.`/`Resolução`
 (atos normativos fora do catálogo), o diploma antes do artigo (`CF, art. 93, IX`,
-`Cód. de Proc. Penal-Militar, art. 5º`) e `arts.` no plural.
+`Cód. de Proc. Penal-Militar, art. 5º`) e `arts.` no plural, inclusive com artigos
+coordenados (`arts. 5º e 7º`: um span, id do primeiro artigo, `real` só se todos existirem).
 
 O dev oficial não tem nenhuma dessas formas (só nomes por extenso e as siglas
 `CLT`/`CPC`/`CPP`): elas vêm dos conjuntos sintéticos. Por isso os testes incluem
@@ -32,6 +33,8 @@ ID_CPP_312 = 10652044
 ID_CPM_290 = 10590194
 ID_CDC_14 = 10606184
 ID_CF_93 = 10626510
+ID_CF_5 = 10641516
+ID_CLT_818 = 10647746
 ID_SUMULA_TST_331 = 1431369957
 
 
@@ -185,6 +188,38 @@ class ArtigosNoPlural(BaseCanonica):
         c = self.uma("os arts. 5º, LIV e LV, da\nConstituição Federal de 1988")
         self.assertTrue(c["trecho"].startswith("arts."), c["trecho"])
         self.assertIn("Constituição Federal", c["trecho"])
+
+    def test_plural_com_incisos_resolve_o_artigo(self):
+        # O `s` de `arts.` era lido como OCR de 5 e o artigo virava 55.
+        for texto in (
+            "os arts. 5º, LIV e LV, da\nConstituição Federal de 1988",
+            "os artigos 5º, LIV e LV, da Constituição Federal",
+        ):
+            with self.subTest(texto=texto):
+                c = self.uma(texto)
+                self.assertEqual(c["classificacao"], "real")
+                self.assertEqual(c["resolucao"], {"id_canonico": str(ID_CF_5)})
+
+    def test_artigos_coordenados_existentes_resolvem_pelo_primeiro(self):
+        for texto, id_esperado in (
+            ("os arts. 5º e 7º da Constituição Federal", ID_CF_5),
+            ("os arts. 5º, 7º e 93 da Constituição Federal", ID_CF_5),
+            ("os arts. 818 e 477 da CLT", ID_CLT_818),
+            # Parágrafo não é artigo coordenado: a lista termina no `§`.
+            ("os arts. 5º, § 1º, e 7º da Constituição Federal", ID_CF_5),
+        ):
+            with self.subTest(texto=texto):
+                c = self.uma(texto)
+                self.assertEqual(c["classificacao"], "real")
+                self.assertEqual(c["resolucao"], {"id_canonico": str(id_esperado)})
+
+    def test_artigo_coordenado_inexistente_torna_a_citacao_inventada(self):
+        for texto in (
+            "os arts. 5º e 999 da Constituição Federal",
+            "os arts. 999 e 5º da Constituição Federal",
+        ):
+            with self.subTest(texto=texto):
+                self.assertEqual(self.uma(texto)["classificacao"], "inventada")
 
 
 class GuardasContraFalsoPositivo(BaseCanonica):

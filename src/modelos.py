@@ -26,6 +26,7 @@ class CitacaoNormalizada:
     origem: str | None = None
     ano: str | None = None
     artigo: str | None = None
+    artigos_coordenados: tuple[str, ...] = ()
     diploma: str | None = None
     numero_lei: str | None = None
     ano_lei: str | None = None

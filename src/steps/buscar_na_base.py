@@ -46,6 +46,15 @@ class Resolvedor:
                     return ResultadoResolucao("inventada", None, "lei_inventada", cobertura="fora_base", motivo="lei_numerada_sem_mapeamento")
                 return ResultadoResolucao("incompleta", None, "lei_sem_estatuto", cobertura="nao_consultada", motivo="diploma_ausente")
             alvo = self.normativos.get(f"lei|{citacao.diploma}|{citacao.artigo}")
+            # Em ``arts. 5º e 7º`` o id é o do primeiro artigo, mas um artigo
+            # coordenado inexistente é identificador explícito inválido.
+            if alvo and any(
+                not self.normativos.get(f"lei|{citacao.diploma}|{artigo}")
+                for artigo in citacao.artigos_coordenados
+            ):
+                return ResultadoResolucao(
+                    "inventada", None, "lei_inventada", motivo="artigo_coordenado_inexistente",
+                )
             return self._resultado_normativo(alvo, "lei")
 
         if citacao.qualificador_invalido and citacao.numero:

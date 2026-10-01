@@ -60,10 +60,29 @@ _NOME_LEI_A_DIREITA = re.compile(
     r"(?:\s+(?:d(?:a|e|o|as|os)|à|às|e|[A-ZÀ-Þ][A-Za-zÀ-ÿ'-]*)){0,5})",
     re.I,
 )
+# Marcador de artigo no singular ou no plural. Um ``s`` seguido de ponto ou
+# espaço é sempre o plural: sem isso, ``arts. 5º`` passava pela correção de OCR
+# como ``art5. 5º`` e era lido como art. 55.
+_MARCADOR_ARTIGO = r"\bart(?:igo)?(?:s(?=[.\s])|(?!s[.\s]))\.?\s*"
 _ARTIGO = re.compile(
-    r"\bart(?:igo)?\.?\s*(?P<numero>\d(?:[\d.]|\s+(?=\d))*)"
+    _MARCADOR_ARTIGO + r"(?P<numero>\d(?:[\d.]|\s+(?=\d))*)"
     r"(?:\s*(?-i:[º°o]))?(?:\s*[-–]\s*(?P<sufixo>[A-Za-z]+))?"
     r"(?![A-Za-z0-9])",
+    re.I,
+)
+# Artigos coordenados logo após o marcador no plural: ``arts. 5º e 7º``,
+# ``artigos 186, 187 e 927``. A lista termina no primeiro item que não é um
+# número de artigo, então incisos e parágrafos (``arts. 5º, LIV e LV``,
+# ``arts. 5º, § 1º``) não são lidos como artigos.
+_ITEM_ARTIGO = (
+    r"(?P<numero>\d(?:[\d.]*\d)?)(?:\s*(?-i:[º°o]))?"
+    r"(?:\s*[-–]\s*(?P<sufixo>(?-i:[A-Z]))(?![A-Za-z]))?(?![\d/])"
+)
+_ITEM_ARTIGO_SEM_GRUPOS = re.sub(r"\(\?P<\w+>", "(?:", _ITEM_ARTIGO)
+_LISTA_ARTIGOS = re.compile(
+    r"\bart(?:igo)?s(?=[.\s])\.?\s*"
+    rf"(?P<lista>{_ITEM_ARTIGO_SEM_GRUPOS}"
+    rf"(?:\s*(?:,\s*(?:e\s+)?|e\s+){_ITEM_ARTIGO_SEM_GRUPOS})+)",
     re.I,
 )
 # Qualificador de ente federativo entre a espécie e o número: "Lei municipal nº
@@ -87,7 +106,7 @@ _ARTIGO_PREFIXO_ESQUERDA = re.compile(r"\bart(?:igo)?\.?\s*[^.\n]{0,30}$", re.I)
 # corromper palavras comuns como "artigo importante").
 _LETRAS_OCR_ARTIGO = "".join(u.OCR_PARA_DIGITO)
 _ARTIGO_OCR_INICIAL = re.compile(
-    r"(?P<marcador>\bart(?:igo)?\.?\s*)(?P<letras>[" + re.escape(_LETRAS_OCR_ARTIGO) + r"]{1,2})"
+    r"(?P<marcador>" + _MARCADOR_ARTIGO + r")(?P<letras>[" + re.escape(_LETRAS_OCR_ARTIGO) + r"]{1,2})"
     r"(?=[.\s]*\d|\s*[º°])",
     re.I,
 )
@@ -389,6 +408,27 @@ def _artigo(trecho: str, contexto_esquerda: str = "") -> str | None:
     return f"{numero}-{sufixo.upper()}" if sufixo else numero
 
 
+def _artigos_coordenados(trecho: str, artigo: str | None) -> tuple[str, ...]:
+    """Artigos citados junto com o primeiro em ``arts. 5º e 7º``.
+
+    O span continua único e o id é o do primeiro artigo; os demais só servem
+    para conferir se todos existem na base.
+    """
+    if artigo is None:
+        return ()
+    lista = _LISTA_ARTIGOS.search(corrigir_ocr(trecho))
+    if lista is None:
+        return ()
+    artigos = []
+    for item in re.finditer(_ITEM_ARTIGO, lista.group("lista")):
+        numero = re.sub(r"\D", "", item.group("numero"))
+        sufixo = item.group("sufixo")
+        lido = f"{numero}-{sufixo.upper()}" if sufixo else numero
+        if lido != artigo and lido not in artigos:
+            artigos.append(lido)
+    return tuple(artigos)
+
+
 def _normalizar_ano_lei(ano: str | None) -> str | None:
     if ano is None:
         return None
@@ -477,6 +517,7 @@ def normalizar_citacao(candidato: dict, familia: Familia, *, ja_normalizado: boo
         _artigo(trecho_legal, candidato.get("_contexto_esquerda", ""))
         if familia == "lei" else None
     )
+    artigos_coordenados = _artigos_coordenados(trecho_legal, artigo) if familia == "lei" else ()
     if familia == "lei":
         diploma, numero_lei, ano_lei, identidade_legal_valida, lei_numerada = _dados_lei(trecho_legal)
         lei_nomeada = bool(_LEI_NOMEADA.search(trecho_legal))
@@ -516,6 +557,7 @@ def normalizar_citacao(candidato: dict, familia: Familia, *, ja_normalizado: boo
         uf=uf,
         ano=ano.group() if ano else None,
         artigo=artigo,
+        artigos_coordenados=artigos_coordenados,
         diploma=diploma,
         numero_lei=numero_lei,
         ano_lei=ano_lei,
