@@ -1287,6 +1287,75 @@ def pontuar_grupo(grupo, categoria):
 
     return pontos
 
+
+_CONECTORES_NOME_DIPLOMA = COMPOSICAO_NOME | {"a", "ao", "aos"}
+
+
+def _fim_de_nome_de_diploma(texto_original, tokens, grupo, fim_atual):
+    """Inclui o nome após ``Lei`` somente em uma citação com artigo explícito."""
+    tem_artigo = any(
+        registro.get("tipo_registro") == "marcador_principal"
+        and registro.get("categoria") == "lei"
+        and registro.get("marcador") in {"art", "artigo", "arts"}
+        for registro in grupo
+    )
+    if not tem_artigo:
+        return fim_atual
+
+    marcadores_lei_no_fim = [
+        registro
+        for registro in grupo
+        if registro.get("tipo_registro") == "marcador_principal"
+        and registro.get("categoria") == "lei"
+        and registro.get("marcador") == "lei"
+        and registro["fim"] == fim_atual
+    ]
+    if not marcadores_lei_no_fim:
+        return fim_atual
+
+    indice_lei = marcadores_lei_no_fim[-1]["fim_token"]
+    indice = indice_lei + 1
+    limite = min(indice + 8, len(tokens))
+    if indice >= limite:
+        return fim_atual
+
+    conector_inicial = tokens[indice]["normalizado"] in _CONECTORES_NOME_DIPLOMA
+    if conector_inicial:
+        indice += 1
+    elif not token_parece_nome(tokens[indice]):
+        return fim_atual
+
+    fim_nome = None
+    substantivos = 0
+    indice_anterior = indice_lei
+    while indice < limite:
+        token = tokens[indice]
+        separador = texto_original[tokens[indice_anterior]["fim"]:token["inicio"]]
+        if re.search(r"[,.;:!?]|\n\s*\n", separador):
+            break
+        normalizado = token["normalizado"]
+        if normalizado in _CONECTORES_NOME_DIPLOMA:
+            indice_anterior = indice
+            indice += 1
+            continue
+        if token_parece_nome(token):
+            substantivos += 1
+            fim_nome = token["fim"]
+            indice_anterior = indice
+            indice += 1
+            continue
+        if (
+            conector_inicial
+            and substantivos == 0
+            and re.fullmatch(r"[a-zà-öø-ÿ][\wà-öø-ÿ-]*", normalizado)
+        ):
+            # OCR pode perder a caixa de um nome curto (``Lei de murphy``).
+            fim_nome = token["fim"]
+        break
+
+    return fim_nome or fim_atual
+
+
 # revisada
 def formar_candidatos(texto_original, tokens, grupos):
     candidatos = []
@@ -1303,6 +1372,10 @@ def formar_candidatos(texto_original, tokens, grupos):
         
         inicio = min(registro["inicio"] for registro in registros_categoria)
         fim = max(registro["fim"] for registro in registros_categoria)
+        if categoria == "lei":
+            fim = _fim_de_nome_de_diploma(
+                texto_original, tokens, registros_categoria, fim
+            )
         pontos = pontuar_grupo(registros_categoria, categoria)
 
         candidatos.append({

@@ -228,7 +228,7 @@ class IdentidadeLegalEstruturada(unittest.TestCase):
         self.assertTrue(forte.contexto_legal_forte)
         self.assertEqual(self.resolvedor.resolver_citacao(forte).classe, "inventada")
 
-    def test_pipeline_preserva_nome_de_lei_cortado_fora_do_span(self):
+    def test_pipeline_inclui_nome_de_lei_no_span_com_artigo(self):
         banco = Path(__file__).resolve().parents[1] / "data" / "desafio1_bracis.db"
         if not banco.is_file():
             self.skipTest("base canônica ausente")
@@ -238,14 +238,50 @@ class IdentidadeLegalEstruturada(unittest.TestCase):
                 with self.subTest(nome=nome):
                     texto = f"Nos termos do art. 1 da Lei de {nome}, decide-se."
                     documento = processar_documento("sintetico", texto, resolvedor)
-                    citacoes = [
-                        citacao for citacao in documento["citacoes"]
-                        if "art. 1" in citacao["trecho"]
-                    ]
-                    self.assertTrue(citacoes)
-                    self.assertTrue(
-                        all(citacao["classificacao"] == "inventada" for citacao in citacoes)
-                    )
+                    self.assertEqual(len(documento["citacoes"]), 1)
+                    citacao = documento["citacoes"][0]
+                    self.assertEqual(citacao["trecho"], f"art. 1 da Lei de {nome}")
+                    self.assertEqual(citacao["classificacao"], "inventada")
+
+    def test_pipeline_inclui_nome_composto_sem_engolir_a_prosa(self):
+        banco = Path(__file__).resolve().parents[1] / "data" / "desafio1_bracis.db"
+        if not banco.is_file():
+            self.skipTest("base canônica ausente")
+        with sqlite3.connect(banco.as_uri() + "?immutable=1", uri=True) as con:
+            resolvedor = Resolvedor(con)
+            for texto, trecho_esperado, classe_esperada in (
+                (
+                    "O art. 2 da Lei Maria da Penha foi invocado.",
+                    "art. 2 da Lei Maria da Penha",
+                    "incompleta",
+                ),
+                (
+                    "O art. 3 da Lei Geral de Proteção de Dados foi citado.",
+                    "art. 3 da Lei Geral de Proteção de Dados",
+                    "incompleta",
+                ),
+                (
+                    "O art. 1 da Lei de Murphy. Aplica-se a regra.",
+                    "art. 1 da Lei de Murphy",
+                    "inventada",
+                ),
+            ):
+                with self.subTest(texto=texto):
+                    citacoes = processar_documento("sintetico", texto, resolvedor)["citacoes"]
+                    self.assertEqual(len(citacoes), 1)
+                    self.assertEqual(citacoes[0]["trecho"], trecho_esperado)
+                    self.assertEqual(citacoes[0]["classificacao"], classe_esperada)
+
+    def test_pipeline_nao_detecta_lei_nomeada_sem_artigo(self):
+        banco = Path(__file__).resolve().parents[1] / "data" / "desafio1_bracis.db"
+        if not banco.is_file():
+            self.skipTest("base canônica ausente")
+        with sqlite3.connect(banco.as_uri() + "?immutable=1", uri=True) as con:
+            resolvedor = Resolvedor(con)
+            documento = processar_documento(
+                "sintetico", "A Lei de Murphy determina que tudo dá errado.", resolvedor
+            )
+            self.assertEqual(documento["citacoes"], [])
 
 
 if __name__ == "__main__":
