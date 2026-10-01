@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pipeline import processar_documento
+from steps.atribuir_confianca import atribuir_confianca
 from steps.buscar_na_base import Resolvedor
 from steps.normalizar_citacao import normalizar_citacao
 
@@ -312,6 +313,35 @@ class IdentidadeLegalEstruturada(unittest.TestCase):
                 with self.subTest(texto=texto):
                     citacoes = processar_documento("sintetico", texto, resolvedor)["citacoes"]
                     self.assertEqual([c["classificacao"] for c in citacoes], ["real"])
+
+    def test_artigo_existente_de_lei_fora_da_base_baixa_so_a_confianca(self):
+        banco = Path(__file__).resolve().parents[1] / "data" / "desafio1_bracis.db"
+        if not banco.is_file():
+            self.skipTest("base canônica ausente")
+        with sqlite3.connect(banco.as_uri() + "?immutable=1", uri=True) as con:
+            resolvedor = Resolvedor(con)
+            for texto, caminho in (
+                ("Nos termos do art. 7º da LGPD, decide-se.", "lei_existente_fora_da_base"),
+                ("Nos termos do art. 7º da Lei nº 13.709/2018, decide-se.", "lei_existente_fora_da_base"),
+                # Além do último artigo da lei: não existe em lugar nenhum.
+                ("Nos termos do art. 99 da LGPD, decide-se.", "lei_inventada"),
+                ("Conforme os arts. 5º e 99 da LGPD, decide-se.", "lei_inventada"),
+                ("Conforme o art 172 da Lei nº 9.504/1997, decide-se.", "lei_inventada"),
+                # Artigo com letra não é verificável pelo último número.
+                ("Conforme o art. 57-K da Lei nº 9.504/1997, decide-se.", "lei_inventada"),
+                ("Conforme o art. 154-A do Código Penal, decide-se.", "lei_inventada"),
+                # Lei sem último artigo cadastrado mantém o caminho de sempre.
+                ("Conforme o art. 60 da Lei nº 13.467/2017, decide-se.", "lei_inventada"),
+            ):
+                with self.subTest(texto=texto):
+                    citacoes = processar_documento("sintetico", texto, resolvedor)["citacoes"]
+                    self.assertEqual(len(citacoes), 1)
+                    self.assertEqual(citacoes[0]["classificacao"], "inventada")
+                    self.assertEqual(citacoes[0]["caminho"], caminho)
+                    self.assertEqual(citacoes[0]["confianca"], atribuir_confianca(caminho))
+            self.assertLess(
+                atribuir_confianca("lei_existente_fora_da_base"), atribuir_confianca("lei_inventada")
+            )
 
     def test_pipeline_nao_detecta_apelido_de_lei_sem_artigo(self):
         banco = Path(__file__).resolve().parents[1] / "data" / "desafio1_bracis.db"
