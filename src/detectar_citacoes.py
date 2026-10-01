@@ -133,6 +133,12 @@ def criar_texto_normalizado(texto_original):
         anterior = texto[indice - 1] if indice > 0 else ""
         proximo = texto[indice + 1] if indice + 1 < len(texto) else ""
 
+        # Em Unicode NFD, o acento é um codepoint separado. Mantê-lo no texto
+        # sombra evita partir ``Súmula`` em dois tokens sem deslocar offsets.
+        if unicodedata.combining(caractere):
+            caracteres.append(caractere)
+            continue
+
         #cobre \t e \n também
         if caractere.isspace():
             caracteres.append(" ")
@@ -161,7 +167,12 @@ def criar_tokens(texto_original):
     tokens = []
 
     for match in re.finditer(r"\S+", texto_normalizado):
-        normalizado = match.group()
+        normalizado = "".join(
+            caractere for caractere in match.group()
+            if not unicodedata.combining(caractere)
+        )
+        if not normalizado:
+            continue
         tokens.append({"original": texto_original[match.start():match.end()],
             "normalizado": normalizado,
             "inicio": match.start(),

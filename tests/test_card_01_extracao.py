@@ -44,6 +44,21 @@ class OffsetsEQuebrasDeLinha(unittest.TestCase):
                 for item in encontrados:
                     self.assertEqual(item["trecho"], texto[item["inicio"]:item["fim"]])
 
+    def test_unicode_nfd_preserva_token_span_e_marcador(self):
+        citacao = "Su\u0301mula 83 do STJ"
+        texto = f"Conforme a {citacao}, aplica-se."
+
+        token = next(
+            item for item in detector.criar_tokens(texto)
+            if item["normalizado"] == "sumula"
+        )
+        self.assertEqual(token["original"], "Su\u0301mula")
+        self.assertEqual(token["original"], texto[token["inicio"]:token["fim"]])
+        self.assertEqual(
+            [item["trecho"] for item in candidatos(texto)],
+            [citacao],
+        )
+
     def test_citacoes_separadas_por_ponto_viram_spans_distintos(self):
         texto = "Conforme REsp 1.741.784/PR. Também incide a Lei 8.078/1990."
         encontrados = candidatos(texto)

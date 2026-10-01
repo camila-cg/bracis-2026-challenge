@@ -451,10 +451,18 @@ def _dados_lei(trecho: str) -> tuple[str | None, str | None, str | None, bool | 
 
 
 def normalizar_citacao(candidato: dict, familia: Familia, *, ja_normalizado: bool = False) -> CitacaoNormalizada:
-    trecho = candidato["trecho"]
+    trecho_original = candidato["trecho"]
+    # A análise usa NFC para que regexes tratem acentos compostos e
+    # decompostos igualmente; o dataclass preserva a superfície e os offsets.
+    trecho = unicodedata.normalize("NFC", trecho_original)
     texto_normalizado = trecho if ja_normalizado else normalizar(trecho, familia)
-    trecho_qualificadores = _trecho_com_contexto_de_qualificadores(candidato)
-    trecho_legal = _trecho_com_contexto_legal(candidato) if familia == "lei" else trecho
+    trecho_qualificadores = unicodedata.normalize(
+        "NFC", _trecho_com_contexto_de_qualificadores(candidato)
+    )
+    trecho_legal = (
+        unicodedata.normalize("NFC", _trecho_com_contexto_legal(candidato))
+        if familia == "lei" else trecho
+    )
     # Tribunal é texto, não número. Corrigir OCR aqui podia transformar o
     # ``ST`` de ``STJ`` em ``57`` quando a sigla vinha logo depois do processo.
     tribunal = _tribunal_explicito(trecho_qualificadores)
@@ -499,7 +507,7 @@ def normalizar_citacao(candidato: dict, familia: Familia, *, ja_normalizado: boo
         familia=familia,
         inicio=candidato["inicio"],
         fim=candidato["fim"],
-        trecho=trecho,
+        trecho=trecho_original,
         normalizado=texto_normalizado,
         tribunal=tribunal,
         qualificador_invalido=qualificador_invalido,

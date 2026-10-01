@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 
 from steps.pipeline_utils import tem_identificador
 
@@ -20,7 +21,9 @@ E_TEMA = re.compile(r"\bt[eê]m[aã]\b", re.I)
 
 
 def rotear(candidato: dict) -> str:
-    trecho = candidato["trecho"]
+    # Regexes de rota devem enxergar NFD e NFC como a mesma superfície. Essa
+    # composição é só semântica; os offsets continuam ligados ao texto bruto.
+    trecho = unicodedata.normalize("NFC", candidato["trecho"])
     if candidato["tipo"] == "lei":
         return ROTA_LEI
     if E_SUMULA.search(trecho):
