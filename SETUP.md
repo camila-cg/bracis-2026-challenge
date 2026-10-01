@@ -235,7 +235,7 @@ os pisos ficam nas constantes do topo de cada teste.
 
 | Gate | Teste | Script para ver os números |
 |---|---|---|
-| Registro de regressão: casos que já geraram erro e controles | `tests/test_casos_regressao.py` (lê `analise/casos_regressao.csv`) | — |
+| Registro de regressão: casos que já geraram erro e controles | `tests/test_casos_regressao.py` (lê `data/validation/casos_regressao.csv`) | — |
 | Holdout sintético (ZIP saneado), pontuado pela métrica oficial | `tests/test_holdout_zip.py` | `uv run --locked --no-default-groups python src/validacao/holdout_zip.py --detalhes` |
 | Base canônica inteira, por tribunal, com falsos positivos | `tests/test_base_inteira.py` | `uv run --locked --no-default-groups python src/validacao/teste_base_inteira.py` |
 | Estresse: ruído e troca de dígito nas citações do dev (4 execuções, cerca de 35 s) | `tests/test_estresse.py` | `uv run --locked --no-default-groups python src/validacao/estresse.py --seeds 3` (cerca de 1 min) |
@@ -257,8 +257,8 @@ export UV_PROJECT_ENVIRONMENT=~/.venvs/bracis-wsl
 
 ## 7. Notebooks
 
-Os notebooks de análise ficam em `src/*.ipynb` (EDA) e `analise/*.ipynb` (manipulação
-dos dados com pandas). Precisam do grupo `notebooks` (`ipykernel`, Jupyter, matplotlib),
+Os notebooks de análise ficam em `notebooks/*.ipynb`. Precisam do grupo `notebooks`
+(`ipykernel`, Jupyter, matplotlib),
 que o `--no-default-groups` das seções anteriores não instala.
 
 Com uv:

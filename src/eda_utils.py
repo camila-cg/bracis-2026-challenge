@@ -32,7 +32,7 @@ _MARCADOR = Path("data") / "goldenset_offsets.csv"
 def raiz_projeto(inicio: Path | str | None = None) -> Path:
     """Sobe a partir de `inicio` até achar a pasta que contém data/goldenset_offsets.csv.
 
-    Permite rodar os notebooks tanto de src/ quanto da raiz do repositório.
+    Permite rodar os notebooks tanto de notebooks/ quanto da raiz do repositório.
     """
     atual = Path(inicio or Path.cwd()).resolve()
     for candidato in [atual, *atual.parents]:

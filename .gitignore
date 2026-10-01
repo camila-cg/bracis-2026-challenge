@@ -14,6 +14,8 @@ __pycache__/
 desafio1_bracis.db
 CONTEXTO.md
 data/*
+!data/validation/
+!data/validation/**
 !data/sinteticos_desafio/
 !data/sinteticos_desafio/**
 saida/

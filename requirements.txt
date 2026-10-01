@@ -2,7 +2,7 @@
 numpy
 pandas
 
-# notebooks de EDA (src/*.ipynb)
+# notebooks de análise (notebooks/*.ipynb)
 ipykernel
 jupyterlab
 matplotlib

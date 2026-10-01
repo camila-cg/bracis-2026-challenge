@@ -316,7 +316,7 @@ fixo de 400 caracteres não é mais usado.
 config/             vocabulários e parâmetros do pipeline
 data/               scripts oficiais e dados locais do desafio
 docs/               descrição do desafio e documentação complementar
-analise/             notebooks e registros usados nas análises
+notebooks/           notebooks usados nas análises
 src/
 ├── pipeline.py      orquestra o processamento de ponta a ponta
 ├── steps/           etapas de extração, resolução e geração da saída

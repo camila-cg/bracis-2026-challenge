@@ -1,4 +1,4 @@
-"""Reexecuta os casos registrados em analise/casos_regressao.csv.
+"""Reexecuta os casos registrados em data/validation/casos_regressao.csv.
 
 Cada linha é um exemplo que já gerou erro, ou um controle contra excesso de
 correção. As colunas legíveis por máquina dizem o que o pipeline deve produzir:
@@ -28,7 +28,7 @@ sys.path.insert(0, str(RAIZ / "src"))
 from pipeline import processar_documento
 from steps.buscar_na_base import Resolvedor
 
-CASOS = RAIZ / "analise" / "casos_regressao.csv"
+CASOS = RAIZ / "data" / "validation" / "casos_regressao.csv"
 COLUNAS = (
     "exemplo", "resultado esperado", "resultado obtido", "motivo", "status",
     "classe_esperada", "id_esperado", "n_citacoes", "trecho_contem", "trecho_nao_contem", "modo_teste",
@@ -77,7 +77,7 @@ def divergencias(caso: dict, citacoes: list[dict]) -> list[str]:
 class FormatoDoRegistro(unittest.TestCase):
     def test_colunas_e_valores_sao_validos(self):
         if not CASOS.is_file():
-            self.skipTest("analise/casos_regressao.csv ausente")
+            self.skipTest("data/validation/casos_regressao.csv ausente")
         casos = carregar_casos()
         self.assertGreater(len(casos), 0)
         self.assertEqual(tuple(casos[0].keys()), COLUNAS)
@@ -106,7 +106,7 @@ class CasosDeRegressao(unittest.TestCase):
         if not banco.is_file():
             raise unittest.SkipTest("base canônica ausente em data/desafio1_bracis.db")
         if not CASOS.is_file():
-            raise unittest.SkipTest("analise/casos_regressao.csv ausente")
+            raise unittest.SkipTest("data/validation/casos_regressao.csv ausente")
         cls.con = sqlite3.connect(banco.as_uri() + "?immutable=1", uri=True)
         cls.resolvedor = Resolvedor(cls.con)
 
