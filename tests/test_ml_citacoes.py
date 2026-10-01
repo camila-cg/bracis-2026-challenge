@@ -189,6 +189,58 @@ class FusaoConservadora(unittest.TestCase):
         self.assertEqual(len(resultado.candidatos), 1)
         self.assertEqual(resultado.candidatos[0]["evidencia_deteccao"]["origem"], "modelo")
 
+    def test_fragmentos_do_mesmo_tipo_contidos_na_regra_nao_duplicam(self):
+        texto = "Cód. de Proc. Penal-Militar, art. 5º, inc. II"
+        inicio_artigo = texto.index("art.")
+        regra = {
+            "tipo": "lei",
+            "inicio": 0,
+            "fim": len(texto),
+            "trecho": texto,
+        }
+        modelo = [
+            CitacaoModelo(0, inicio_artigo - 1, "LEI", 0.39),
+            CitacaoModelo(inicio_artigo, len(texto), "LEI", 0.54),
+        ]
+
+        resultado = fusionar(
+            [regra],
+            modelo,
+            texto,
+            limiares={"LEI": 0.0, "JUR": 0.0},
+            filtro_distrator=self.nao_distrator,
+        )
+
+        self.assertEqual(len(resultado.candidatos), 1)
+        self.assertEqual(resultado.candidatos[0]["trecho"], texto)
+
+    def test_contencao_nao_suprime_fragmento_de_tipo_diferente(self):
+        texto = "Cód. de Proc. Penal-Militar, art. 5º, inc. II"
+        inicio_artigo = texto.index("art.")
+        regra = {
+            "tipo": "lei",
+            "inicio": 0,
+            "fim": len(texto),
+            "trecho": texto,
+        }
+        modelo = [
+            CitacaoModelo(inicio_artigo, len(texto), "JUR", 0.54),
+        ]
+
+        resultado = fusionar(
+            [regra],
+            modelo,
+            texto,
+            limiares={"LEI": 0.0, "JUR": 0.0},
+            filtro_distrator=self.nao_distrator,
+        )
+
+        self.assertEqual(len(resultado.candidatos), 2)
+        self.assertEqual(
+            [item["tipo"] for item in resultado.candidatos],
+            ["lei", "jurisprudencia"],
+        )
+
     def test_verificador_recebe_somente_exclusivos_e_incerto_nao_entra(self):
         class VerificadorFalso:
             def __init__(self):
@@ -617,7 +669,7 @@ class ExperimentoPareado(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'texto idêntico'):
                 validar_entrada(dados, execucao)
 
-    def test_regras_recall_perfeito_nao_mascara_fp_adicionado(self):
+    def test_regras_absorvem_fragmento_mas_fp_permanece_na_metrica_bruta(self):
         from unittest.mock import patch
         from ml_citacoes.experimento_bio import executar
         class FalsoDetector:
@@ -635,8 +687,18 @@ class ExperimentoPareado(unittest.TestCase):
             self.assertTrue(r['regras_perfeitas_em_recall'])
             for modo in ('argmax', 'viterbi'):
                 self.assertEqual(r['variantes'][modo]['recall_adicional_sobre_regras'], 0)
-                self.assertEqual(r['variantes'][modo]['fp_realmente_acrescentados'], 1)
-                self.assertEqual(r['variantes'][modo]['exclusivos_adicionados']['geral']['precisao'], 0)
+                self.assertEqual(
+                    r['variantes'][modo]['bruto']['iou_05']['geral']['fp'], 1
+                )
+                self.assertEqual(r['variantes'][modo]['fp_realmente_acrescentados'], 0)
+                self.assertEqual(
+                    r['variantes'][modo]['exclusivos_adicionados']['geral']['tp'],
+                    0,
+                )
+                self.assertEqual(
+                    r['variantes'][modo]['exclusivos_adicionados']['geral']['fp'],
+                    0,
+                )
 
     def test_fragmentacao_compara_somente_mesmo_documento(self):
         from ml_citacoes.experimento_bio import _fragmentacao

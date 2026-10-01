@@ -25,6 +25,20 @@ def iou(a_inicio: int, a_fim: int, b_inicio: int, b_fim: int) -> float:
     return intersecao / (max(a_fim, b_fim) - min(a_inicio, b_inicio))
 
 
+def cobertura_da_predicao(
+    regra_inicio: int, regra_fim: int, pred_inicio: int, pred_fim: int
+) -> float:
+    """Fração do span do modelo contida no candidato produzido por regra."""
+    largura_predicao = pred_fim - pred_inicio
+    if largura_predicao <= 0:
+        return 0.0
+    intersecao = max(
+        0,
+        min(regra_fim, pred_fim) - max(regra_inicio, pred_inicio),
+    )
+    return intersecao / largura_predicao
+
+
 def fusionar(
     regras: list[dict],
     modelo: Iterable[CitacaoModelo],
@@ -34,6 +48,7 @@ def fusionar(
     filtro_distrator: Callable[[dict, str], bool],
     verificador: VerificadorCandidatos | None = None,
     iou_minimo: float = 0.5,
+    cobertura_predicao_minima: float = 0.9,
     iou_nms: float = 0.5,
 ) -> ResultadoFusao:
     candidatos = [dict(item) for item in regras]
@@ -43,21 +58,36 @@ def fusionar(
     predicoes = list(modelo)
 
     for indice_regra, regra in enumerate(regras):
-        sobrepostos = [
-            (indice, pred, iou(regra["inicio"], regra["fim"], pred.inicio, pred.fim))
+        relacoes = [
+            (
+                indice,
+                pred,
+                iou(regra["inicio"], regra["fim"], pred.inicio, pred.fim),
+                cobertura_da_predicao(
+                    regra["inicio"], regra["fim"], pred.inicio, pred.fim
+                ),
+            )
             for indice, pred in enumerate(predicoes)
         ]
-        sobrepostos = [item for item in sobrepostos if item[2] >= iou_minimo]
+        sobrepostos = [
+            item
+            for item in relacoes
+            if item[2] >= iou_minimo
+            or (
+                item[1].tipo_pipeline == regra["tipo"]
+                and item[3] >= cobertura_predicao_minima
+            )
+        ]
         usados_por_regra.update(item[0] for item in sobrepostos)
         mesmo_tipo = [item for item in sobrepostos if item[1].tipo_pipeline == regra["tipo"]]
         if mesmo_tipo:
-            indice, pred, valor_iou = max(mesmo_tipo, key=lambda item: item[2])
+            indice, pred, valor_iou, _ = max(mesmo_tipo, key=lambda item: item[2])
             evidencia = EvidenciaDeteccao(
                 "ambos", pred.tipo_pipeline, pred.score_bruto, pred.score_calibrado,
                 valor_iou, "concordancia", pred.transformacoes_ocr,
             )
         elif sobrepostos:
-            indice, pred, valor_iou = max(sobrepostos, key=lambda item: item[2])
+            indice, pred, valor_iou, _ = max(sobrepostos, key=lambda item: item[2])
             evidencia = EvidenciaDeteccao(
                 "regra", pred.tipo_pipeline, pred.score_bruto, pred.score_calibrado,
                 valor_iou, "discordancia_tipo", pred.transformacoes_ocr,
