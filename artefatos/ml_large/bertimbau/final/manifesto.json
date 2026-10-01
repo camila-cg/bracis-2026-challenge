@@ -1,0 +1,753 @@
+{
+  "checkpoint": "neuralmind/bert-large-portuguese-cased",
+  "revisao_solicitada": "main",
+  "revisao_resolvida": "aa302f6ea73b759f7df9cad58bd272127b67ec28",
+  "labels": [
+    "O",
+    "B-LEI",
+    "I-LEI",
+    "B-JUR",
+    "I-JUR"
+  ],
+  "lora": {
+    "rank": 7,
+    "alpha": 14,
+    "dropout": 0.075,
+    "target_modules": [
+      "value",
+      "query"
+    ]
+  },
+  "max_length": 512,
+  "stride": 96,
+  "seed": 260926,
+  "fold": "todos",
+  "documentos_treino": [
+    "gen_n1_001",
+    "gen_n1_002",
+    "gen_n1_003",
+    "gen_n1_004",
+    "gen_n1_005",
+    "gen_n1_006",
+    "gen_n1_007",
+    "gen_n1_008",
+    "gen_n1_009",
+    "gen_n1_010",
+    "gen_n1_011",
+    "gen_n1_012",
+    "gen_n1_013",
+    "gen_n2_001",
+    "gen_n2_002",
+    "gen_n2_003",
+    "gen_n2_004",
+    "gen_n2_005",
+    "gen_n2_006",
+    "gen_n2_007",
+    "gen_n2_008",
+    "gen_n2_009",
+    "gen_n2_010",
+    "gen_n2_011",
+    "gen_n2_012",
+    "gen_n2_013",
+    "jbsg26-1-01-e4d161dec7dd",
+    "jbsg26-1-02-36d15a253977",
+    "jbsg26-1-03-eab959f5f373",
+    "jbsg26-1-04-542db88e0046",
+    "jbsg26-1-05-e98dbccf2065",
+    "jbsg26-1-06-1d88f6ffd57a",
+    "jbsg26-1-07-1b14e640b881",
+    "jbsg26-1-08-4903fe33190b",
+    "jbsg26-1-09-114a10f81fbb",
+    "jbsg26-1-10-548d7dabb2e0",
+    "jbsg26-1-11-0cfb5b2b26e3",
+    "jbsg26-1-12-7af8d2b2c013",
+    "jbsg26-1-13-c5ef4db892f4",
+    "jbsg26-2-14-dbce42504b28",
+    "jbsg26-2-15-1ffd5efe6e6e",
+    "jbsg26-2-16-4d8ee60da1a0",
+    "jbsg26-2-17-a13b02dd6463",
+    "jbsg26-2-18-7b20935d46af",
+    "jbsg26-2-19-89c11dd265ff",
+    "jbsg26-2-20-ccf75d5b912d",
+    "jbsg26-2-21-9175333b9657",
+    "jbsg26-2-22-34eb9dd2d14d",
+    "jbsg26-2-23-a6d8295ece58",
+    "jbsg26-2-24-007ef8ff5f72",
+    "jbsg26-2-25-519aff2358e2",
+    "jbsg26-2-26-7ca021e6bfea"
+  ],
+  "documentos_treino_originais": [
+    "gen_n1_001",
+    "gen_n1_002",
+    "gen_n1_003",
+    "gen_n1_004",
+    "gen_n1_005",
+    "gen_n1_006",
+    "gen_n1_007",
+    "gen_n1_008",
+    "gen_n1_009",
+    "gen_n1_010",
+    "gen_n1_011",
+    "gen_n1_012",
+    "gen_n1_013",
+    "gen_n2_001",
+    "gen_n2_002",
+    "gen_n2_003",
+    "gen_n2_004",
+    "gen_n2_005",
+    "gen_n2_006",
+    "gen_n2_007",
+    "gen_n2_008",
+    "gen_n2_009",
+    "gen_n2_010",
+    "gen_n2_011",
+    "gen_n2_012",
+    "gen_n2_013"
+  ],
+  "documentos_treino_sinteticos": [
+    "jbsg26-1-01-e4d161dec7dd",
+    "jbsg26-1-02-36d15a253977",
+    "jbsg26-1-03-eab959f5f373",
+    "jbsg26-1-04-542db88e0046",
+    "jbsg26-1-05-e98dbccf2065",
+    "jbsg26-1-06-1d88f6ffd57a",
+    "jbsg26-1-07-1b14e640b881",
+    "jbsg26-1-08-4903fe33190b",
+    "jbsg26-1-09-114a10f81fbb",
+    "jbsg26-1-10-548d7dabb2e0",
+    "jbsg26-1-11-0cfb5b2b26e3",
+    "jbsg26-1-12-7af8d2b2c013",
+    "jbsg26-1-13-c5ef4db892f4",
+    "jbsg26-2-14-dbce42504b28",
+    "jbsg26-2-15-1ffd5efe6e6e",
+    "jbsg26-2-16-4d8ee60da1a0",
+    "jbsg26-2-17-a13b02dd6463",
+    "jbsg26-2-18-7b20935d46af",
+    "jbsg26-2-19-89c11dd265ff",
+    "jbsg26-2-20-ccf75d5b912d",
+    "jbsg26-2-21-9175333b9657",
+    "jbsg26-2-22-34eb9dd2d14d",
+    "jbsg26-2-23-a6d8295ece58",
+    "jbsg26-2-24-007ef8ff5f72",
+    "jbsg26-2-25-519aff2358e2",
+    "jbsg26-2-26-7ca021e6bfea"
+  ],
+  "documentos_validacao": [],
+  "dataset_sha256": "793a3b6bcc6fcb78eff4d8aa95fd2843895461424c94525cbebe0e0798ff8952",
+  "temperatura": 1.0,
+  "calibracao": "nenhuma",
+  "metrica_selecao_checkpoint": "positive_f1",
+  "recursos_treino": {
+    "batch_size": 1,
+    "eval_batch_size": 1,
+    "gradient_accumulation": 4,
+    "batch_efetivo": 4,
+    "gradient_checkpointing": true,
+    "precisao": "fp32",
+    "duracao_segundos": 147.17177041701507,
+    "pico_vram_alocada_mib": 1436.40478515625,
+    "pico_vram_reservada_mib": 1508.0
+  },
+  "aumentos_ocr": [
+    {
+      "documento_id": "gen_n1_001",
+      "transformacoes": [
+        {
+          "span": 4,
+          "posicao": 19,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 4,
+          "posicao": 29,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 7,
+          "posicao": 8,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 7,
+          "posicao": 9,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 7,
+          "posicao": 21,
+          "original": "5",
+          "substituto": "S"
+        },
+        {
+          "span": 7,
+          "posicao": 25,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 7,
+          "posicao": 29,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 7,
+          "posicao": 31,
+          "original": "0",
+          "substituto": "O"
+        }
+      ]
+    },
+    {
+      "documento_id": "gen_n1_002",
+      "transformacoes": [
+        {
+          "span": 5,
+          "posicao": 19,
+          "original": "0",
+          "substituto": "O"
+        }
+      ]
+    },
+    {
+      "documento_id": "gen_n1_003",
+      "transformacoes": [
+        {
+          "span": 2,
+          "posicao": 14,
+          "original": "5",
+          "substituto": "S"
+        }
+      ]
+    },
+    {
+      "documento_id": "gen_n1_004",
+      "transformacoes": [
+        {
+          "span": 2,
+          "posicao": 27,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 3,
+          "posicao": 10,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 3,
+          "posicao": 30,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 4,
+          "posicao": 7,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 5,
+          "posicao": 6,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 5,
+          "posicao": 8,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 5,
+          "posicao": 16,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 5,
+          "posicao": 23,
+          "original": "0",
+          "substituto": "O"
+        }
+      ]
+    },
+    {
+      "documento_id": "gen_n1_006",
+      "transformacoes": [
+        {
+          "span": 1,
+          "posicao": 40,
+          "original": "1",
+          "substituto": "l"
+        },
+        {
+          "span": 2,
+          "posicao": 6,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 2,
+          "posicao": 8,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 2,
+          "posicao": 20,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 2,
+          "posicao": 27,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 8,
+          "posicao": 23,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 8,
+          "posicao": 26,
+          "original": "1",
+          "substituto": "l"
+        },
+        {
+          "span": 8,
+          "posicao": 33,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 8,
+          "posicao": 43,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 8,
+          "posicao": 45,
+          "original": "0",
+          "substituto": "O"
+        }
+      ]
+    },
+    {
+      "documento_id": "gen_n1_007",
+      "transformacoes": [
+        {
+          "span": 1,
+          "posicao": 18,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 7,
+          "posicao": 13,
+          "original": "5",
+          "substituto": "S"
+        }
+      ]
+    },
+    {
+      "documento_id": "gen_n1_008",
+      "transformacoes": [
+        {
+          "span": 1,
+          "posicao": 24,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 1,
+          "posicao": 26,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 1,
+          "posicao": 36,
+          "original": "5",
+          "substituto": "S"
+        },
+        {
+          "span": 1,
+          "posicao": 39,
+          "original": "5",
+          "substituto": "S"
+        },
+        {
+          "span": 2,
+          "posicao": 33,
+          "original": "0",
+          "substituto": "O"
+        }
+      ]
+    },
+    {
+      "documento_id": "gen_n1_009",
+      "transformacoes": [
+        {
+          "span": 5,
+          "posicao": 29,
+          "original": "5",
+          "substituto": "S"
+        }
+      ]
+    },
+    {
+      "documento_id": "gen_n1_010",
+      "transformacoes": [
+        {
+          "span": 5,
+          "posicao": 23,
+          "original": "5",
+          "substituto": "S"
+        }
+      ]
+    },
+    {
+      "documento_id": "gen_n1_012",
+      "transformacoes": [
+        {
+          "span": 0,
+          "posicao": 18,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 0,
+          "posicao": 20,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 0,
+          "posicao": 24,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 0,
+          "posicao": 30,
+          "original": "5",
+          "substituto": "S"
+        },
+        {
+          "span": 2,
+          "posicao": 9,
+          "original": "5",
+          "substituto": "S"
+        },
+        {
+          "span": 2,
+          "posicao": 14,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 2,
+          "posicao": 18,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 5,
+          "posicao": 25,
+          "original": "1",
+          "substituto": "l"
+        },
+        {
+          "span": 5,
+          "posicao": 35,
+          "original": "1",
+          "substituto": "I"
+        }
+      ]
+    },
+    {
+      "documento_id": "gen_n1_013",
+      "transformacoes": [
+        {
+          "span": 4,
+          "posicao": 48,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 4,
+          "posicao": 58,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 5,
+          "posicao": 22,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 5,
+          "posicao": 26,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 5,
+          "posicao": 28,
+          "original": "0",
+          "substituto": "O"
+        }
+      ]
+    },
+    {
+      "documento_id": "gen_n2_002",
+      "transformacoes": [
+        {
+          "span": 1,
+          "posicao": 9,
+          "original": "1",
+          "substituto": "I"
+        }
+      ]
+    },
+    {
+      "documento_id": "gen_n2_003",
+      "transformacoes": [
+        {
+          "span": 1,
+          "posicao": 40,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 1,
+          "posicao": 47,
+          "original": "1",
+          "substituto": "I"
+        },
+        {
+          "span": 2,
+          "posicao": 12,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 2,
+          "posicao": 16,
+          "original": "5",
+          "substituto": "S"
+        },
+        {
+          "span": 2,
+          "posicao": 19,
+          "original": "5",
+          "substituto": "S"
+        },
+        {
+          "span": 6,
+          "posicao": 37,
+          "original": "5",
+          "substituto": "S"
+        }
+      ]
+    },
+    {
+      "documento_id": "gen_n2_004",
+      "transformacoes": [
+        {
+          "span": 2,
+          "posicao": 12,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 2,
+          "posicao": 13,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 2,
+          "posicao": 24,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 2,
+          "posicao": 33,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 2,
+          "posicao": 34,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 3,
+          "posicao": 29,
+          "original": "0",
+          "substituto": "O"
+        }
+      ]
+    },
+    {
+      "documento_id": "gen_n2_006",
+      "transformacoes": [
+        {
+          "span": 3,
+          "posicao": 38,
+          "original": "1",
+          "substituto": "l"
+        },
+        {
+          "span": 4,
+          "posicao": 19,
+          "original": "1",
+          "substituto": "I"
+        },
+        {
+          "span": 4,
+          "posicao": 26,
+          "original": "0",
+          "substituto": "O"
+        }
+      ]
+    },
+    {
+      "documento_id": "gen_n2_007",
+      "transformacoes": [
+        {
+          "span": 0,
+          "posicao": 15,
+          "original": "1",
+          "substituto": "I"
+        },
+        {
+          "span": 0,
+          "posicao": 24,
+          "original": "1",
+          "substituto": "l"
+        },
+        {
+          "span": 0,
+          "posicao": 28,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 0,
+          "posicao": 31,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 5,
+          "posicao": 7,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 5,
+          "posicao": 8,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 5,
+          "posicao": 11,
+          "original": "1",
+          "substituto": "I"
+        },
+        {
+          "span": 5,
+          "posicao": 26,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 7,
+          "posicao": 23,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 7,
+          "posicao": 24,
+          "original": "0",
+          "substituto": "O"
+        }
+      ]
+    },
+    {
+      "documento_id": "gen_n2_011",
+      "transformacoes": [
+        {
+          "span": 7,
+          "posicao": 36,
+          "original": "0",
+          "substituto": "O"
+        }
+      ]
+    },
+    {
+      "documento_id": "gen_n2_013",
+      "transformacoes": [
+        {
+          "span": 0,
+          "posicao": 12,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 3,
+          "posicao": 11,
+          "original": "0",
+          "substituto": "O"
+        },
+        {
+          "span": 5,
+          "posicao": 10,
+          "original": "0",
+          "substituto": "O"
+        }
+      ]
+    }
+  ],
+  "balanceamento": {
+    "janelas_positivas": 122,
+    "janelas_negativas_disponiveis": 2,
+    "janelas_negativas_usadas": 2,
+    "tokens_positivos": 7056,
+    "tokens_o_disponiveis": 43669,
+    "tokens_o_usados_na_perda": 21168,
+    "proporcao_o_por_positivo": 3.0,
+    "proporcao_negativas": 3.0,
+    "contagens_rotulos": {
+      "O": 21168,
+      "B-LEI": 88,
+      "I-LEI": 820,
+      "B-JUR": 363,
+      "I-JUR": 5785
+    },
+    "pesos_classes": {
+      "O": 1.0,
+      "B-LEI": 3.938213790971222,
+      "I-LEI": 2.2540653013692227,
+      "B-JUR": 2.76339711883103,
+      "I-JUR": 1.3830698557099375
+    }
+  }
+}
