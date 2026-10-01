@@ -205,35 +205,66 @@ def criar_registro(tipo_registro, inicio_token, fim_token, tokens, pontos, **dad
 def similaridade(a, b):
     return SequenceMatcher(None, a, b).ratio()
 
-#procura marcador mais parecido no vocabulário
-def encontrar_marcador_parecido(expressao, opcoes, threshold=0.80):
-    melhor_opcao = None
-    melhor_score = 0
-    for opcao in opcoes:
-        #Siglas muito curtas geram falsos positivos com similaridade aproximada
-        expressao = expressao.rstrip(".")
-        #se o marcador do vocabulário for muito curto, ignora se não for exatamente igual à expressão
-        if (len(opcao) <= 3 or len(expressao) <= 3) and expressao!=opcao:
-            continue
-        partes_expressao = expressao.split()
-        partes_opcao = opcao.split()
-        if len(partes_opcao) > 1:
-            parte_muito_diferente = False
+# Ruído OCR de marcador: só trocas caractere a caractere observadas no nível 2
+# (``Fedcral``, ``reelamante``, ``lnsurge``, ``5úmula``, ``C0NTROVÉRSIA``).
+# Similaridade genérica aceitava palavras de prosa (``procedente`` ->
+# ``precedente``, ``constitutivo`` -> ``constituicao``) que esticavam o span.
+_REGRAS_OCR = carregar_config("regras_ocr")
+_CONFUSOES_OCR = frozenset(
+    frozenset((letra.lower(), digito))
+    for letra, digito in _REGRAS_OCR["letra_para_digito"].items()
+) | frozenset(frozenset(par) for par in _REGRAS_OCR["letra_para_letra"])
+_MAXIMO_TROCAS_OCR = _REGRAS_OCR["maximo_trocas_marcador"]
 
-            for parte_expressao, parte_opcao in zip(partes_expressao, partes_opcao):
-                score_parte = similaridade(parte_expressao, parte_opcao)
-                if score_parte <0.50:
-                    parte_muito_diferente = True
-                    break
-            if parte_muito_diferente:
-                continue
-        score = similaridade(expressao, opcao)
-        if score > melhor_score:
-            melhor_score = score
-            melhor_opcao = opcao
-    if melhor_score >= threshold:
-        return melhor_opcao, melhor_score
-    return None, melhor_score
+
+def trocas_ocr(atual, esperado):
+    """Quantidade de trocas OCR entre as formas, ou None se não for só ruído."""
+    if len(atual) != len(esperado):
+        return None
+    trocas = 0
+    for caractere_atual, caractere_esperado in zip(atual, esperado):
+        if caractere_atual == caractere_esperado:
+            continue
+        if frozenset((caractere_atual, caractere_esperado)) not in _CONFUSOES_OCR:
+            return None
+        trocas += 1
+    return trocas
+
+
+def formas_flexionadas(palavra):
+    """Singular e plural regulares (``artigos``, ``especiais``, ``reclamacoes``)."""
+    formas = {palavra, palavra + "s"}
+    if palavra.endswith("al"):
+        formas.add(palavra[:-2] + "ais")
+    if palavra.endswith("ao"):
+        formas.add(palavra[:-2] + "oes")
+    return formas
+
+
+#procura marcador do vocabulário que só difere da expressão por plural ou ruído OCR
+def encontrar_marcador_parecido(expressao, opcoes):
+    expressao = expressao.rstrip(".")
+    #Siglas muito curtas geram falsos positivos mesmo com uma única troca
+    if len(expressao) <= 3:
+        return None, 0
+    partes_expressao = expressao.split()
+    for opcao in opcoes:
+        partes_opcao = opcao.split()
+        if len(opcao) <= 3 or len(partes_opcao) != len(partes_expressao):
+            continue
+        total_trocas = 0
+        for parte_expressao, parte_opcao in zip(partes_expressao, partes_opcao):
+            trocas = [
+                quantidade for forma in formas_flexionadas(parte_opcao)
+                if (quantidade := trocas_ocr(parte_expressao, forma)) is not None
+            ]
+            if not trocas:
+                break
+            total_trocas += min(trocas)
+        else:
+            if total_trocas <= _MAXIMO_TROCAS_OCR and expressao != opcao:
+                return opcao, similaridade(expressao, opcao)
+    return None, 0
 
 def tem_numero_logo_depois(indice, tokens):
     proximos = tokens[indice + 1: indice + 3]
@@ -1079,6 +1110,34 @@ def numero_comeca_nova_frase(
     )
 
 
+def indicio_no_meio_da_frase_seguinte(
+    texto_original, grupo_atual, registro_anterior, registro_atual
+):
+    """Não anexa um indício que só aparece no meio da frase seguinte.
+
+    ``Súmula Vinculante 10 do STF. O verbete, voltado à reserva de plenário``
+    termina em ``STF``: ``plenário`` está depois da prosa da nova frase
+    (palavras em minúscula). Evidência que abre a frase seguinte
+    (``SP. Rel. Min. …``, ``SP. Terceira Turma``) continua no mesmo span.
+    """
+    tem_inicio_juridico = any(
+        item["tipo_registro"] in {"marcador_principal", "classe_processual"}
+        for item in grupo_atual
+    )
+    tem_identificador = any(
+        item["tipo_registro"] in {"numero_processual", "numero_legal"}
+        for item in grupo_atual
+    )
+    if not (tem_inicio_juridico and tem_identificador):
+        return False
+    separador = texto_original[registro_anterior["fim"]:registro_atual["inicio"]]
+    fim_de_frase = _FIM_DE_FRASE_APOS_REGISTRO.match(separador)
+    return (
+        fim_de_frase is not None
+        and re.search(r"(?<![^\W\d_])[a-zà-ÿ]", separador[fim_de_frase.end():]) is not None
+    )
+
+
 def nova_fonte_coordenada(texto_original, grupo_atual, registro_atual):
     """Separa fontes autônomas ligadas por ``e`` ou ``bem como``.
 
@@ -1176,9 +1235,12 @@ def agrupar_registros(texto_original, registros):
         nova_fonte = nova_fonte_coordenada(
             texto_original, grupo_atual, registro
         )
+        indicio_em_nova_frase = indicio_no_meio_da_frase_seguinte(
+            texto_original, grupo_atual, anterior, registro
+        )
 
         #outra heurística que talvez precise ser ajustada para generalização
-        if (distancia <= _PIPELINE["distancia_maxima_grupo"] and tamanho_grupo <= _PIPELINE["tamanho_maximo_grupo"] and not novo_marcador_distante and not novo_marcador_categoria_diferente and not nova_sv_apos_citacao_numerada and not numero_em_nova_frase and not nova_fonte and not limite_entre_citacoes(texto_original, anterior, registro)):
+        if (distancia <= _PIPELINE["distancia_maxima_grupo"] and tamanho_grupo <= _PIPELINE["tamanho_maximo_grupo"] and not novo_marcador_distante and not novo_marcador_categoria_diferente and not nova_sv_apos_citacao_numerada and not numero_em_nova_frase and not nova_fonte and not indicio_em_nova_frase and not limite_entre_citacoes(texto_original, anterior, registro)):
             grupo_atual.append(registro)
         else:
             grupos.append(grupo_atual)

@@ -6,9 +6,36 @@ import sqlite3
 
 import eda_utils as u
 import indice_utils as ind
+from configuracao import carregar_config
 from modelos import CitacaoNormalizada, ResultadoResolucao
 from steps.normalizar_citacao import normalizar_citacao
 from steps.rotear_citacao import ROTA_ACORDAO, ROTA_DESCRITIVA, ROTA_LEI, ROTA_SUMULA, ROTA_TEMA
+
+# Último artigo de leis reais ausentes da base. ``art. 7º da LGPD`` continua
+# `inventada` (zero registros na cobertura congelada), mas com a confiança do
+# caminho ``lei_existente_fora_da_base``: o dispositivo existe fora da base e o
+# gabarito pode tratá-lo de outra forma. ``art. 172 da Lei nº 9.504/1997`` (a
+# lei vai até o 107) não existe em lugar nenhum e mantém ``lei_inventada``.
+# Artigo com letra (``57-K``) não é verificável pelo último número e também
+# mantém ``lei_inventada``.
+_ULTIMO_ARTIGO_FORA_DA_BASE = {
+    tuple(chave.split("/", 1)): ultimo
+    for chave, ultimo in carregar_config("diplomas")["ultimo_artigo_fora_da_base"].items()
+}
+
+
+def _caminho_lei_fora_da_base(citacao: CitacaoNormalizada) -> str:
+    ultimos = {
+        ultimo for (numero, ano), ultimo in _ULTIMO_ARTIGO_FORA_DA_BASE.items()
+        if numero == citacao.numero_lei and (citacao.ano_lei is None or ano == citacao.ano_lei)
+    }
+    if len(ultimos) != 1:
+        return "lei_inventada"
+    ultimo = next(iter(ultimos))
+    artigos = (citacao.artigo, *citacao.artigos_coordenados)
+    if all(artigo.isdigit() and 1 <= int(artigo) <= ultimo for artigo in artigos):
+        return "lei_existente_fora_da_base"
+    return "lei_inventada"
 
 
 class Resolvedor:
@@ -28,9 +55,19 @@ class Resolvedor:
     def resolver_citacao(self, citacao: CitacaoNormalizada) -> ResultadoResolucao:
         """Decide a classificação a partir dos atributos extraídos."""
         if citacao.familia == ROTA_LEI:
+            if not citacao.artigo:
+                # Sem artigo a citação não individualiza um dispositivo da
+                # base, esteja a lei no catálogo ou não: é evasiva, não
+                # alucinação. Só um número de lei zerado é inválido por si.
+                if citacao.numero_lei and not citacao.numero_lei.strip("0"):
+                    return ResultadoResolucao(
+                        "inventada", None, "lei_inventada", cobertura="fora_base",
+                        motivo="numero_zero",
+                    )
+                return ResultadoResolucao("incompleta", None, "lei_sem_artigo", cobertura="nao_consultada", motivo="artigo_ausente")
             if citacao.identidade_legal_valida is False:
                 return ResultadoResolucao(
-                    "inventada", None, "lei_inventada", cobertura="fora_base",
+                    "inventada", None, _caminho_lei_fora_da_base(citacao), cobertura="fora_base",
                     motivo="lei_numerada_sem_mapeamento",
                 )
             if not citacao.diploma and citacao.lei_nomeada and citacao.contexto_legal_forte:
@@ -38,12 +75,10 @@ class Resolvedor:
                     "inventada", None, "lei_inventada", cobertura="fora_base",
                     motivo="diploma_nomeado_sem_mapeamento",
                 )
-            if not citacao.artigo:
-                return ResultadoResolucao("incompleta", None, "lei_sem_artigo", cobertura="nao_consultada", motivo="artigo_ausente")
             if not citacao.diploma:
                 if citacao.lei_numerada:
                     # Convenção do desafio: lei numerada fora do catálogo congelado.
-                    return ResultadoResolucao("inventada", None, "lei_inventada", cobertura="fora_base", motivo="lei_numerada_sem_mapeamento")
+                    return ResultadoResolucao("inventada", None, _caminho_lei_fora_da_base(citacao), cobertura="fora_base", motivo="lei_numerada_sem_mapeamento")
                 return ResultadoResolucao("incompleta", None, "lei_sem_estatuto", cobertura="nao_consultada", motivo="diploma_ausente")
             alvo = self.normativos.get(f"lei|{citacao.diploma}|{citacao.artigo}")
             # Em ``arts. 5º e 7º`` o id é o do primeiro artigo, mas um artigo

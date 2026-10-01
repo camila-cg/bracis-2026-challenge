@@ -116,17 +116,19 @@ class Enunciado(BaseCanonica):
 
 
 class AtosNormativosForaDoCatalogo(BaseCanonica):
-    def test_decreto_e_resolucao_numerados_entram_no_span_e_sao_inventadas(self):
-        for texto, prefixo in (
-            ("o Decreto 10.000/2019, art. 2", "Decreto"),
-            ("a Res. CNJ nº 455, de 27-4-2022", "Res."),
-            ("a Resolução CNJ 400/2021, art. 2", "Resolução"),
-            ("o Decr. 9.83O, de 1O/6/2O19", "Decr."),
+    def test_decreto_e_resolucao_numerados_entram_no_span(self):
+        # Com artigo, o dispositivo não existe na base: inventada. Sem artigo,
+        # o ato não individualiza um dispositivo: incompleta, como a lei.
+        for texto, prefixo, classe in (
+            ("o Decreto 10.000/2019, art. 2", "Decreto", "inventada"),
+            ("a Res. CNJ nº 455, de 27-4-2022", "Res.", "incompleta"),
+            ("a Resolução CNJ 400/2021, art. 2", "Resolução", "inventada"),
+            ("o Decr. 9.83O, de 1O/6/2O19", "Decr.", "incompleta"),
         ):
             with self.subTest(texto=texto):
                 c = self.uma(texto)
                 self.assertTrue(c["trecho"].startswith(prefixo), c["trecho"])
-                self.assertEqual(c["classificacao"], "inventada")
+                self.assertEqual(c["classificacao"], classe)
 
     def test_decreto_lei_do_catalogo_continua_resolvendo(self):
         c = self.uma("o art. 896 do Decreto-Lei nº 5.452/1943")
