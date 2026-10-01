@@ -72,6 +72,39 @@ _ENTE_FEDERATIVO = r"(?:municipal|mun\.?|estadual|est\.?|distrital|dist\.?|feder
 # O catálogo de diplomas só tem leis federais: uma lei estadual, municipal ou
 # distrital de mesmo número e ano não é o diploma do catálogo.
 _ENTES_NAO_FEDERAIS = {"municipal", "mun", "estadual", "est", "distrital", "dist"}
+# Recupera "art." cortado à esquerda do span pelo extrator (ex. quando o número
+# do artigo foi inteiramente substituído por letra de OCR e por isso não sobrou
+# nenhum dígito para ancorar o agrupamento). Não altera o span nem o trecho
+# reportado — mesmo princípio de _qualificador_a_esquerda. A janela pequena e a
+# exigência de não cruzar ponto final limitam o risco de pegar um "art." de
+# outra frase.
+_ARTIGO_PREFIXO_ESQUERDA = re.compile(r"\bart(?:igo)?\.?\s*[^.\n]{0,30}$", re.I)
+# Letra de OCR logo após "art."/"artigo" quando o contexto imediatamente
+# seguinte (dígito, ponto+dígito, ou o sinal ordinal º/°) confirma que ali
+# deveria haver um número. A âncora em "art." é o que torna seguro corrigir
+# aqui mesmo sem dígito adjacente sobrevivente (diferente da correção de OCR
+# genérica em corrigir_ocr, que exige adjacência a um dígito para não
+# corromper palavras comuns como "artigo importante").
+_LETRAS_OCR_ARTIGO = "".join(u.OCR_PARA_DIGITO)
+_ARTIGO_OCR_INICIAL = re.compile(
+    r"(?P<marcador>\bart(?:igo)?\.?\s*)(?P<letras>[" + re.escape(_LETRAS_OCR_ARTIGO) + r"]{1,2})"
+    r"(?=[.\s]*\d|\s*[º°])",
+    re.I,
+)
+
+
+def _prefixo_artigo_a_esquerda(contexto_esquerda: str) -> str:
+    m = _ARTIGO_PREFIXO_ESQUERDA.search(contexto_esquerda)
+    return m.group() if m else ""
+
+
+def _corrigir_ocr_artigo(trecho: str) -> str:
+    def _trocar(m: re.Match) -> str:
+        corpo = "".join(u.OCR_PARA_DIGITO.get(c, c) for c in m.group("letras"))
+        return m.group("marcador") + corpo
+    return _ARTIGO_OCR_INICIAL.sub(_trocar, trecho)
+
+
 _IDENTIDADE_LEI = re.compile(
     # `decreto-lei` vem antes de `decreto` (a alternância escolhe a primeira que casa).
     # `res.` exige o ponto, para não casar a palavra comum "res"; a sigla do órgão
@@ -336,13 +369,15 @@ def _diploma(trecho: str) -> str | None:
     return max(correspondencias, default=(0, None))[1]
 
 
-def _artigo(trecho: str) -> str | None:
+def _artigo(trecho: str, contexto_esquerda: str = "") -> str | None:
     # Prefere a leitura com mais dígitos. Assim, um prefixo parcial como ``3``
     # em ``3 l 2`` não impede a leitura OCR de ``312``, e empates preservam a
     # superfície original e seus sufixos jurídicos (``290-B``).
-    bruto = _ARTIGO.search(trecho)
-    corrigido = _ARTIGO.search(corrigir_ocr(trecho))
-    candidatos = [artigo for artigo in (bruto, corrigido) if artigo]
+    ampliado = _prefixo_artigo_a_esquerda(contexto_esquerda) + trecho
+    bruto = _ARTIGO.search(ampliado)
+    corrigido = _ARTIGO.search(corrigir_ocr(ampliado))
+    ancorado = _ARTIGO.search(corrigir_ocr(_corrigir_ocr_artigo(ampliado)))
+    candidatos = [artigo for artigo in (bruto, corrigido, ancorado) if artigo]
     if not candidatos:
         return None
     artigo = max(
@@ -430,7 +465,10 @@ def normalizar_citacao(candidato: dict, familia: Familia, *, ja_normalizado: boo
     )
     uf = _uf_explicita(trecho_qualificadores)
     ano = _ANO.search(trecho)
-    artigo = _artigo(trecho_legal) if familia == "lei" else None
+    artigo = (
+        _artigo(trecho_legal, candidato.get("_contexto_esquerda", ""))
+        if familia == "lei" else None
+    )
     if familia == "lei":
         diploma, numero_lei, ano_lei, identidade_legal_valida, lei_numerada = _dados_lei(trecho_legal)
         lei_nomeada = bool(_LEI_NOMEADA.search(trecho_legal))

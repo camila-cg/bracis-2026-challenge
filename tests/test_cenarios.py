@@ -132,6 +132,31 @@ class ResolucaoAcordaos(unittest.TestCase):
             ("real", 5665364632),
         )
 
+    def test_fts_resolve_acordao_sem_cabecalho_parseavel(self):
+        # doc_0505 (TSE) está na lista de "sem_parser" de
+        # construir_indice_acordaos — o cabeçalho não bate com TSE_CABECALHO.
+        # O fallback de FTS ainda encontra pelo número cru no texto integral.
+        self.assertEqual(
+            self.resolvedor.acordao("Recurso Eleitoral nº 10975-2016.6.13.0133, TSE")[:2],
+            ("real", 469075172),
+        )
+
+    @unittest.expectedFailure
+    def test_fts_nao_resolve_acordao_com_cnj_malformado(self):
+        # doc_0551 (TSE) é um dos dois que restam em sem_parser depois do
+        # conserto de encoding (ver test_acordaos_sem_parser.py); aqui o
+        # problema não é o cabeçalho, é o próprio número no corpo do
+        # documento: "185-05. 20.16.6. , 250024" não fecha um CNJ válido —
+        # nenhuma forma reconstruída bate com o que está indexado no FTS.
+        # Bug conhecido, registrado aqui para não ser reintroduzido
+        # silenciosamente como "corrigido".
+        self.assertEqual(
+            self.resolvedor.acordao(
+                "Agravo Regimental no Agravo de Instrumento nº 185-05.2016.6.25.0024, TSE"
+            )[:2],
+            ("real", 568736504),
+        )
+
 
 class ResolucaoNormativos(unittest.TestCase):
     @classmethod
@@ -150,12 +175,38 @@ class ResolucaoNormativos(unittest.TestCase):
     def test_artigo_sem_estatuto_deveria_ser_incompleto(self):
         resultado = self.resolvedor.lei("art. 373")
         self.assertEqual(resultado, ("incompleta", None, "lei_sem_estatuto"))
-        self.assertEqual(atribuir_confianca(resultado[2]), 0.60)
+        self.assertEqual(atribuir_confianca(resultado[2]), 0.85)
 
     def test_sumula_sem_tribunal_deveria_ser_incompleta(self):
         resultado = self.resolvedor.sumula("Súmula 83")
         self.assertEqual(resultado, ("incompleta", None, "sumula_sem_tribunal"))
-        self.assertEqual(atribuir_confianca(resultado[2]), 0.60)
+        self.assertEqual(atribuir_confianca(resultado[2]), 0.85)
+
+    def test_sumula_sem_numero_deveria_ser_incompleta(self):
+        resultado = self.resolvedor.sumula("conforme entendimento sumulado desta Corte")
+        self.assertEqual(resultado, ("incompleta", None, "sumula_sem_numero"))
+        self.assertEqual(atribuir_confianca(resultado[2]), 0.85)
+
+    def test_todas_as_sumulas_da_base_resolvem_como_reais(self):
+        # Só existem 5 súmulas na base inteira (natureza='sumula') — dá pra
+        # testar o universo completo, não uma amostra dele.
+        casos = [
+            ("Súmula 83 do STJ", 1289710642),
+            ("Súmula n. 211 do STJ", 1289710776),
+            ("Súmula 443 do STJ", 1289711022),
+            ("Súmula Vinculante 10", 1289712966),
+            ("Súmula 331 do TST", 1431369957),
+        ]
+        for trecho, id_esperado in casos:
+            with self.subTest(trecho=trecho):
+                self.assertEqual(self.resolvedor.sumula(trecho)[:2], ("real", id_esperado))
+
+    def test_sumulas_com_numero_plausivel_mas_inexistente_sao_inventadas(self):
+        casos = ("Súmula 84 do STJ", "Súmula 212 do STJ", "Súmula 100 do TST",
+                "Súmula Vinculante 11", "Súmula 999 do STF")
+        for trecho in casos:
+            with self.subTest(trecho=trecho):
+                self.assertEqual(self.resolvedor.sumula(trecho)[:2], ("inventada", None))
 
     def test_artigo_com_estatuto_continua_real_ou_inventado(self):
         self.assertEqual(self.resolvedor.lei("art. 373 do CPC")[:2], ("real", 28893055))

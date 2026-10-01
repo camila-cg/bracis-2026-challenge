@@ -5,12 +5,12 @@
   "distancia_marcadores_jurisprudencia": 2,
   "digitos_cnj_min": 14,
   "confianca": {
-    "lei_real": 0.95, "lei_inventada": 0.90, "lei_sem_artigo": 0.60,
-    "lei_sem_estatuto": 0.60, "sumula_real": 0.95, "sumula_inventada": 0.90,
-    "sumula_sem_numero": 0.60, "sumula_sem_tribunal": 0.60,
-    "lei_ambigua": 0.50, "sumula_ambigua": 0.50,
-    "tema": 0.85, "descritiva": 0.90, "acordao_indice": 0.97,
-    "acordao_fts": 0.90, "acordao_zero": 0.85, "acordao_ambigua": 0.50
+    "lei_real": 0.98, "lei_inventada": 0.974, "lei_sem_artigo": 0.85,
+    "lei_sem_estatuto": 0.85, "sumula_real": 0.96, "sumula_inventada": 0.92,
+    "sumula_sem_numero": 0.85, "sumula_sem_tribunal": 0.85,
+    "lei_ambigua": 0.80, "sumula_ambigua": 0.80,
+    "tema": 0.90, "descritiva": 0.98, "acordao_indice": 0.98,
+    "acordao_fts": 0.86, "acordao_zero": 0.98, "acordao_ambigua": 0.80
   },
   "desconto_fonte_modelo": 0.0
 }
