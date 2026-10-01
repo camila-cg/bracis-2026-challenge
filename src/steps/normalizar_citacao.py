@@ -40,6 +40,12 @@ _MARCADOR_NUMERO = re.compile(
     r"(?:n(?:[uú]mero|[.º°o](?:\s*[º°o.])?)?\s*)",
     re.I,
 )
+# Números de processos antigos podem ter somente um ou dois dígitos. Esse
+# fallback é deliberadamente separado de ``NUMERO_LIVRE``: só o chamador que
+# já confirmou classe processual + marcador explícito pode habilitá-lo.
+_NUMERO_PROCESSUAL_CURTO = re.compile(
+    r"^\s*(?P<numero>\d{1,2})(?!\d)(?!\s*[.\-–—]\s*\d)(?!\s*/\s*\d)"
+)
 _LIGACAO_QUALIFICADOR = re.compile(
     r"\s*(?:(?:,|e)\s*)?"
     r"(?:(?:do|da|dos|das|no|na|nos|nas|pelo|pela)\s+)?",
@@ -122,9 +128,15 @@ def _sem_acento(texto: str) -> str:
     return "".join(c for c in normalizado if not unicodedata.combining(c))
 
 
-def _canonizar_numero_acordao(fragmento: str) -> str | None:
+def _canonizar_numero_acordao(
+    fragmento: str, *, aceitar_curto: bool = False
+) -> str | None:
     formas = u.variantes_numero(fragmento)
     if not formas:
+        if aceitar_curto:
+            curto = _NUMERO_PROCESSUAL_CURTO.match(corrigir_ocr(fragmento))
+            if curto:
+                return curto.group("numero")
         return None
     cnj = u.chave_cnj(formas[0])
     if cnj is not None:
@@ -147,7 +159,9 @@ def _numero_acordao(trecho: str) -> str | None:
         sufixo = trecho[achado.end():]
         marcador = _MARCADOR_NUMERO.search(_sem_acento(sufixo))
         if marcador:
-            numero = _canonizar_numero_acordao(sufixo[marcador.end():])
+            numero = _canonizar_numero_acordao(
+                sufixo[marcador.end():], aceitar_curto=True
+            )
             if numero is not None:
                 return numero
         numero = _canonizar_numero_acordao(ANO_SOLTO.sub(" ", sufixo))

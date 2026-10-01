@@ -15,9 +15,9 @@ from validacao import teste_base_inteira as t
 # limite na mesma mudança.
 PISO_OK_POR_TRIBUNAL = {"STF": 196, "STJ": 168, "STM": 164, "TSE": 109, "TST": 169}
 TETO_RESPOSTA_ERRADA = 0          # real_errado + inventada_errado
-TETO_NAO_EXTRAIU = 31
+TETO_NAO_EXTRAIU = 28
 TETO_EXTRAS_NA_FRASE = 0
-TETO_PREVISOES_EM_DISTRATORES = 3
+TETO_PREVISOES_EM_DISTRATORES = 2
 
 
 class FraseDeCitacao(unittest.TestCase):

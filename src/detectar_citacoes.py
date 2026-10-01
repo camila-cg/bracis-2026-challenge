@@ -44,6 +44,10 @@ MARCADORES_LEGAIS_NUMERADOS = set(_DIPLOMAS["marcadores_numerados"])
 SIGLAS = set(_CLASSES["siglas"])
 SIGLAS_CLASSES_AMBIGUAS = _CLASSES.get("siglas_classes_ambiguas", {})
 MARCADORES_EXATOS = set(_CLASSES.get("marcadores_exatos", []))
+PADROES_CLASSES_CITADAS = tuple(
+    re.compile(item["padrao"], re.I)
+    for item in _CLASSES["classes_citadas"]
+)
 IOU_MIN = 0.5
 COBERTURA_EXTRA_MIN = 0.9
 
@@ -399,6 +403,25 @@ def procurar_marcadores_principais(tokens):
     return marcadores_principais
 
 
+_INDICADORES_NUMERO_PROCESSUAL = {"n", "nº", "n°", "numero"}
+
+
+def numero_curto_em_contexto_forte(indice, tokens):
+    """Reconhece 1–2 dígitos só depois de classe conhecida e `nº` equivalente."""
+    texto = tokens[indice]["normalizado"]
+    curto = re.fullmatch(r"\d{1,2}(?:[/-]([a-z]{2}))?", texto)
+    if curto is None or (curto.group(1) and curto.group(1) not in UFS):
+        return False
+    if indice == 0 or tokens[indice - 1]["normalizado"] not in _INDICADORES_NUMERO_PROCESSUAL:
+        return False
+    # Doze tokens cobrem as classes por extenso mais longas da configuração,
+    # sem deixar uma classe distante qualificar qualquer número posterior.
+    contexto = " ".join(
+        token["normalizado"] for token in tokens[max(0, indice - 13):indice - 1]
+    )
+    return any(padrao.search(contexto) for padrao in PADROES_CLASSES_CITADAS)
+
+
 def procurar_numeros(tokens):
     indicios = []
 
@@ -434,7 +457,14 @@ def procurar_numeros(tokens):
             #Data inválida sem contexto segue para a verificação de número processual.
 
         quantidade_digitos = len(re.findall(r"\d", texto))
-        possui_formato_processual = (quantidade_digitos >= 4 or bool(re.search(r"\d[./-]\d", texto)) or bool(re.search(r"[a-z]+-.*\d", texto)))
+        # Processos antigos podem ter somente 1–2 dígitos. O contexto forte os
+        # distingue de quantidades soltas antes mesmo do roteamento.
+        possui_formato_processual = (
+            quantidade_digitos >= 4
+            or bool(re.search(r"\d[./-]\d", texto))
+            or bool(re.search(r"[a-z]+-.*\d", texto))
+            or numero_curto_em_contexto_forte(indice, tokens)
+        )
 
         tipo = "numero_processual" if possui_formato_processual else "numero_legal"
         pontos=1

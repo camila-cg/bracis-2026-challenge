@@ -9,9 +9,10 @@
     "sumula vinculante", "tema", "repercussao geral", "processo", "acordao", "julgado",
     "precedente", "agr", "mandado de seguranca", "apelacao", "apelacao criminal", "sv",
     "ap crim", "ap criminal",
-    "airr", "rrag", "pext", "embargos infringentes", "enunciado"
+    "airr", "rrag", "pext", "embargos infringentes", "enunciado",
+    "cautelar inominada", "cautelar inominada criminal"
   ],
-  "marcadores_exatos": ["apelacao", "sv", "airr", "rrag", "pext", "enunciado", "res", "decr", "decreto", "resolucao", "arts", "cf", "cod", "penal-militar",
+  "marcadores_exatos": ["apelacao", "sv", "airr", "rrag", "pext", "enunciado", "res", "decr", "decreto", "resolucao", "arts", "cf", "cod", "penal-militar", "cautelar inominada", "cautelar inominada criminal",
     "c l t", "c p c", "c p p", "c p m", "cod de proc penal-militar", "cod de proc penal militar", "cod de proc penal", "cod de proc civil"],
 
   "siglas": ["re", "resp", "aresp", "respe", "rhc", "hc", "rse", "apl", "rms", "rr", "arr", "ar", "rp", "agarr", "rcl", "recl", "agr", "agrg", "agint", "ed", "edcl", "eds", "airr", "rrag"],
