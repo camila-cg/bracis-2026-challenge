@@ -484,6 +484,7 @@ def procurar_classes_processuais_ambiguas(tokens):
 
 
 _OCR_DE_LEI = {"le1", "lel"}
+_OCR_DE_SUMULA = {"5umula", "sumu1a"}
 _ATOS_QUE_EXIGEM_IDENTIFICADOR_LOCAL = {
     "lei", "lei complementar", "decreto", "decr",
 }
@@ -600,6 +601,11 @@ def procurar_marcadores_principais(tokens, texto_original):
         if (marcador_encontrado is None and token_atual in _OCR_DE_LEI
                 and tem_numero_logo_depois(indice, tokens)):
             marcador_encontrado = ("lei", "lei", 0.9, indice)
+
+        # OCR controlado no marcador: evita depender do fuzzy genérico, que
+        # confundia ``sumulada`` com ``sumula`` e produzia falso ``real``.
+        if marcador_encontrado is None and token_atual in _OCR_DE_SUMULA:
+            marcador_encontrado = ("jurisprudencia", "sumula", 0.9, indice)
 
          #agora somente procura no vocabulário se não for uma sigla composta
         if marcador_encontrado is None:

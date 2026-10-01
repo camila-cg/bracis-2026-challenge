@@ -16,7 +16,7 @@
     "prestacao de contas", "lista triplice", "rot", "irr",
     "conflito de jurisdicao", "incompatibilidade", "correicao parcial militar"
   ],
-  "marcadores_exatos": ["apelacao", "sv", "airr", "rrag", "pext", "enunciado", "res", "decr", "decreto", "resolucao", "arts", "cf", "cod", "penal-militar", "cautelar inominada", "cautelar inominada criminal", "iac", "qo no iac", "acao penal", "acao direta de inconstitucionalidade", "acao rescisoria", "suspensao de seguranca", "suspensao de liminar e de sentenca", "peticao", "prestacao de contas", "lista triplice", "rot", "irr", "conflito de jurisdicao", "incompatibilidade", "correicao parcial militar",
+  "marcadores_exatos": ["apelacao", "sv", "sumula", "sumula vinculante", "airr", "rrag", "pext", "enunciado", "res", "decr", "decreto", "resolucao", "arts", "cf", "cod", "penal-militar", "cautelar inominada", "cautelar inominada criminal", "iac", "qo no iac", "acao penal", "acao direta de inconstitucionalidade", "acao rescisoria", "suspensao de seguranca", "suspensao de liminar e de sentenca", "peticao", "prestacao de contas", "lista triplice", "rot", "irr", "conflito de jurisdicao", "incompatibilidade", "correicao parcial militar",
     "c l t", "c p c", "c p p", "c p m", "cod de proc penal-militar", "cod de proc penal militar", "cod de proc penal", "cod de proc civil"],
 
   "siglas": ["re", "resp", "aresp", "respe", "rhc", "hc", "rse", "apl", "rms", "rr", "arr", "ar", "rp", "agarr", "rcl", "recl", "agr", "agrg", "agint", "ed", "edcl", "eds", "airr", "rrag", "rot", "irr"],

@@ -200,6 +200,13 @@ class TiposDeCitacao(unittest.TestCase):
             with self.subTest(trecho=trecho):
                 self.assertEqual(candidatos(trecho), [])
 
+    def test_ocr_controlado_de_sumula_nao_aceita_palavra_parecida(self):
+        self.assertEqual(
+            [item["trecho"] for item in candidatos("Súmu1a 83 do STJ")],
+            ["Súmu1a 83 do STJ"],
+        )
+        self.assertEqual(candidatos("sumulada 83 do STJ"), [])
+
     def test_sv_exata_sem_aproximacao_aceita_qualquer_caixa(self):
         for sigla in ("SV", "Sv", "sV", "sv"):
             with self.subTest(sigla=sigla):
