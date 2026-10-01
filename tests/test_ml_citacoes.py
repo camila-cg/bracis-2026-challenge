@@ -303,6 +303,190 @@ class FusaoConservadora(unittest.TestCase):
         self.assertEqual(resultado.eventos[0]["tipo_previsto"], "jurisprudencia")
         self.assertEqual(resultado.eventos[0]["tipo_final"], "lei")
 
+    def test_verificador_combina_fragmentos_rejeitados_quando_conjunto_e_aceito(self):
+        class VerificadorComposto:
+            def __init__(self):
+                self.recebidos = []
+
+            def classificar_muitos(self, trechos):
+                self.recebidos = list(trechos)
+                return [
+                    ResultadoVerificacao(
+                        "CITACAO_LEGISLACAO" if trecho == texto else "NAO_CITACAO",
+                        .99,
+                        {
+                            "CITACAO_LEGISLACAO": .99 if trecho == texto else .01,
+                            "CITACAO_JURISPRUDENCIA": 0.0,
+                            "INCERTO": 0.0,
+                            "NAO_CITACAO": .01 if trecho == texto else .99,
+                        },
+                        "falso",
+                        "hash",
+                    )
+                    for trecho in trechos
+                ]
+
+        texto = "Cód. de Proc. Penal-Militar, art. 5º, inc. II"
+        inicio_artigo = texto.index("art.")
+        modelo = [
+            CitacaoModelo(0, inicio_artigo - 1, "JUR", .7),
+            CitacaoModelo(inicio_artigo, len(texto), "LEI", .6),
+        ]
+        verificador = VerificadorComposto()
+
+        resultado = fusionar(
+            [], modelo, texto,
+            limiares={"LEI": 0.0, "JUR": 0.0},
+            filtro_distrator=self.nao_distrator,
+            verificador=verificador,
+        )
+
+        self.assertEqual(verificador.recebidos, [
+            "Cód. de Proc. Penal-Militar,",
+            "art. 5º, inc. II",
+            texto,
+        ])
+        self.assertEqual(len(resultado.candidatos), 1)
+        self.assertEqual(resultado.candidatos[0]["trecho"], texto)
+        self.assertEqual(resultado.candidatos[0]["tipo"], "lei")
+        self.assertEqual(
+            resultado.candidatos[0]["evidencia_deteccao"]["composicao_fragmentos"],
+            [{"inicio": 0, "fim": inicio_artigo - 1},
+             {"inicio": inicio_artigo, "fim": len(texto)}],
+        )
+
+    def test_combinado_rejeitado_preserva_individuais_aceitos(self):
+        class VerificadorSeparado:
+            def __init__(self):
+                self.recebidos = []
+
+            def classificar_muitos(self, trechos):
+                self.recebidos = list(trechos)
+                return [
+                    ResultadoVerificacao(
+                        "NAO_CITACAO" if trecho == texto else "CITACAO_JURISPRUDENCIA",
+                        .9,
+                        {
+                            "CITACAO_LEGISLACAO": 0.0,
+                            "CITACAO_JURISPRUDENCIA": .9 if trecho != texto else .02,
+                            "INCERTO": 0.0,
+                            "NAO_CITACAO": .1 if trecho != texto else .98,
+                        },
+                        "falso",
+                        "hash",
+                    )
+                    for trecho in trechos
+                ]
+
+        texto = "Tema 339/STF Tema 1.076/STJ"
+        segundo = texto.index("Tema", 1)
+        modelo = [
+            CitacaoModelo(0, segundo - 1, "JUR", .8),
+            CitacaoModelo(segundo, len(texto), "JUR", .8),
+        ]
+        verificador = VerificadorSeparado()
+
+        resultado = fusionar(
+            [], modelo, texto,
+            limiares={"LEI": 0.0, "JUR": 0.0},
+            filtro_distrator=self.nao_distrator,
+            verificador=verificador,
+        )
+
+        self.assertEqual(len(verificador.recebidos), 3)
+        self.assertEqual(
+            [candidato["trecho"] for candidato in resultado.candidatos],
+            ["Tema 339/STF", "Tema 1.076/STJ"],
+        )
+
+    def test_combinado_aceito_nao_substitui_individual_aceito(self):
+        class VerificadorConservador:
+            def classificar_muitos(self, trechos):
+                decisoes = {
+                    "Tema 339/STF": "CITACAO_JURISPRUDENCIA",
+                    "fragmento": "NAO_CITACAO",
+                    texto: "CITACAO_JURISPRUDENCIA",
+                }
+                return [
+                    ResultadoVerificacao(decisoes[trecho], .9, {
+                        "CITACAO_LEGISLACAO": 0.0,
+                        "CITACAO_JURISPRUDENCIA": .9,
+                        "INCERTO": 0.0,
+                        "NAO_CITACAO": .1,
+                    }, "falso", "hash")
+                    for trecho in trechos
+                ]
+
+        texto = "Tema 339/STF fragmento"
+        segundo = texto.index("fragmento")
+        resultado = fusionar(
+            [], [
+                CitacaoModelo(0, segundo - 1, "JUR", .8),
+                CitacaoModelo(segundo, len(texto), "JUR", .7),
+            ], texto,
+            limiares={"LEI": 0.0, "JUR": 0.0},
+            filtro_distrator=self.nao_distrator,
+            verificador=VerificadorConservador(),
+        )
+
+        self.assertEqual(
+            [candidato["trecho"] for candidato in resultado.candidatos],
+            ["Tema 339/STF"],
+        )
+
+    def test_nao_combina_atraves_de_conector_com_nova_fonte(self):
+        class VerificadorLegislacao:
+            def __init__(self):
+                self.recebidos = []
+
+            def classificar_muitos(self, trechos):
+                self.recebidos = list(trechos)
+                return [
+                    ResultadoVerificacao("CITACAO_LEGISLACAO", .9, {
+                        "CITACAO_LEGISLACAO": .9,
+                        "CITACAO_JURISPRUDENCIA": .03,
+                        "INCERTO": .03,
+                        "NAO_CITACAO": .04,
+                    }, "falso", "hash")
+                    for _ in trechos
+                ]
+
+        texto = "art. 5º da CF e o Decr. 9.830/2019"
+        inicio_decreto = texto.index("Decr.")
+        modelo = [
+            CitacaoModelo(0, texto.index(" e o"), "LEI", .8),
+            CitacaoModelo(inicio_decreto, len(texto), "LEI", .8),
+        ]
+        verificador = VerificadorLegislacao()
+
+        resultado = fusionar(
+            [], modelo, texto,
+            limiares={"LEI": 0.0, "JUR": 0.0},
+            filtro_distrator=self.nao_distrator,
+            verificador=verificador,
+        )
+
+        self.assertEqual(verificador.recebidos, ["art. 5º da CF", "Decr. 9.830/2019"])
+        self.assertEqual(len(resultado.candidatos), 2)
+
+    def test_sem_verificador_nao_cria_hipotese_combinada(self):
+        texto = "Cód. de Proc. Penal-Militar, art. 5º, inc. II"
+        inicio_artigo = texto.index("art.")
+        resultado = fusionar(
+            [], [
+                CitacaoModelo(0, inicio_artigo - 1, "JUR", .7),
+                CitacaoModelo(inicio_artigo, len(texto), "LEI", .6),
+            ], texto,
+            limiares={"LEI": 0.0, "JUR": 0.0},
+            filtro_distrator=self.nao_distrator,
+        )
+
+        self.assertEqual(len(resultado.candidatos), 2)
+        self.assertNotIn(
+            "composicao_fragmentos",
+            resultado.candidatos[0]["evidencia_deteccao"],
+        )
+
     def test_classe_d_e_rejeitada(self):
         resultado = ResultadoVerificacao("NAO_CITACAO", .9, {
             "CITACAO_LEGISLACAO": .02, "CITACAO_JURISPRUDENCIA": .03,
