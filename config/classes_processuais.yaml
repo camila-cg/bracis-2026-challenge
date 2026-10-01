@@ -10,12 +10,16 @@
     "precedente", "agr", "mandado de seguranca", "apelacao", "apelacao criminal", "sv",
     "ap crim", "ap criminal",
     "airr", "rrag", "pext", "embargos infringentes", "enunciado",
-    "cautelar inominada", "cautelar inominada criminal", "iac", "qo no iac"
+    "cautelar inominada", "cautelar inominada criminal", "iac", "qo no iac",
+    "acao penal", "acao direta de inconstitucionalidade", "acao rescisoria",
+    "suspensao de seguranca", "suspensao de liminar e de sentenca", "peticao",
+    "prestacao de contas", "lista triplice", "rot", "irr",
+    "conflito de jurisdicao", "incompatibilidade", "correicao parcial militar"
   ],
-  "marcadores_exatos": ["apelacao", "sv", "airr", "rrag", "pext", "enunciado", "res", "decr", "decreto", "resolucao", "arts", "cf", "cod", "penal-militar", "cautelar inominada", "cautelar inominada criminal", "iac", "qo no iac",
+  "marcadores_exatos": ["apelacao", "sv", "airr", "rrag", "pext", "enunciado", "res", "decr", "decreto", "resolucao", "arts", "cf", "cod", "penal-militar", "cautelar inominada", "cautelar inominada criminal", "iac", "qo no iac", "acao penal", "acao direta de inconstitucionalidade", "acao rescisoria", "suspensao de seguranca", "suspensao de liminar e de sentenca", "peticao", "prestacao de contas", "lista triplice", "rot", "irr", "conflito de jurisdicao", "incompatibilidade", "correicao parcial militar",
     "c l t", "c p c", "c p p", "c p m", "cod de proc penal-militar", "cod de proc penal militar", "cod de proc penal", "cod de proc civil"],
 
-  "siglas": ["re", "resp", "aresp", "respe", "rhc", "hc", "rse", "apl", "rms", "rr", "arr", "ar", "rp", "agarr", "rcl", "recl", "agr", "agrg", "agint", "ed", "edcl", "eds", "airr", "rrag"],
+  "siglas": ["re", "resp", "aresp", "respe", "rhc", "hc", "rse", "apl", "rms", "rr", "arr", "ar", "rp", "agarr", "rcl", "recl", "agr", "agrg", "agint", "ed", "edcl", "eds", "airr", "rrag", "rot", "irr"],
   "siglas_classes_ambiguas": {
     "ai": {
       "classe": "agravodeinstrumento",
@@ -69,9 +73,19 @@
     {"padrao": "\\b(?:ADPF|ARGUICAO\\s+DE\\s+DESCUMPRIMENTO\\s+DE\\s+PRECEITO\\s+FUNDAMENTAL)\\b", "classe": "adpf"},
     {"padrao": "\\b(?:MANDADO\\s+DE\\s+INJUNCAO|MI\\b(?=[\\s\\-]*(?:N[º°.]?\\s*)?\\d))", "classe": "mandadodeinjuncao"},
     {"padrao": "\\b(?:HABEAS\\s+DATA|HD\\b(?=[\\s\\-]*(?:N[º°.]?\\s*)?\\d))", "classe": "habeasdata"},
+    {"padrao": "\\b(?:(?:QUESTAO|QO)\\s+(?:DE\\s+ORDEM\\s+)?NO\\s+)?(?:IAC|INCIDENTE\\s+DE\\s+ASSUNCAO\\s+DE\\s+COMPETENCIA)\\b", "classe": "incidentedeassuncaodecompetencia"},
+    {"padrao": "\\bACAO\\s+PENAL\\b", "classe": "acaopenal"},
+    {"padrao": "\\bSUSPENSAO\\s+DE\\s+SEGURANCA\\b", "classe": "suspensaodeseguranca"},
+    {"padrao": "\\bSUSPENSAO\\s+DE\\s+LIMINAR\\s+E\\s+DE\\s+SENTENCA\\b", "classe": "suspensaodeliminaresesentenca"},
+    {"padrao": "\\bPETICAO\\b", "classe": "peticao"},
+    {"padrao": "\\bPRESTACAO\\s+DE\\s+CONTAS\\b", "classe": "prestacaodecontas"},
+    {"padrao": "\\bLISTA\\s+TRIPLICE\\b", "classe": "listatriplice"},
+    {"padrao": "\\bIRR\\b", "classe": "incidentederecursosrepetitivos"},
+    {"padrao": "\\bCONFLITO\\s+DE\\s+JURISDICAO\\b", "classe": "conflitodejurisdicao"},
+    {"padrao": "\\bINCOMPATIBILIDADE\\b", "classe": "incompatibilidade"},
+    {"padrao": "\\bCORREICAO\\s+PARCIAL\\s+MILITAR\\b", "classe": "correicaoparcialmilitar"},
     {"padrao": "\\bAGRAVO\\s+INTERNO\\b", "classe": "agravointerno"},
-    {"padrao": "\\bEMBARGOS\\s+DE\\s+DECLARACAO\\b", "classe": "embargosdedeclaracao"},
-    {"padrao": "\\b(?:(?:QUESTAO|QO)\\s+(?:DE\\s+ORDEM\\s+)?NO\\s+)?(?:IAC|INCIDENTE\\s+DE\\s+ASSUNCAO\\s+DE\\s+COMPETENCIA)\\b", "classe": "incidentedeassuncaodecompetencia"}
+    {"padrao": "\\bEMBARGOS\\s+DE\\s+DECLARACAO\\b", "classe": "embargosdedeclaracao"}
   ],
   "classes_genericas": {
     "apelacaocriminal": "apelacao"

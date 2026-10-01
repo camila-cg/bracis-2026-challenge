@@ -33,6 +33,11 @@ _PIPELINE = carregar_config("pipeline")
 MARCADORES_VOCABULARIO = {
     "jurisprudencia": _CLASSES["marcadores_jurisprudencia"],
     "lei": _DIPLOMAS["marcadores_lei"],}
+MAX_TOKENS_MARCADOR = max(
+    len(marcador.split())
+    for marcadores in MARCADORES_VOCABULARIO.values()
+    for marcador in marcadores
+)
 TRIBUNAIS = set(_TRIBUNAIS["siglas"])
 UFS = set(_TRIBUNAIS["ufs"])
 ORGAOS_JULGADORES = _TRIBUNAIS.get("orgaos_julgadores", [])
@@ -501,7 +506,7 @@ def procurar_marcadores_principais(tokens, texto_original):
 
          #agora somente procura no vocabulário se não for uma sigla composta
         if marcador_encontrado is None:
-            for tamanho in (5, 4, 3, 2, 1):
+            for tamanho in range(MAX_TOKENS_MARCADOR, 0, -1):
                 #fim exclusivo
                 fim = indice + tamanho
                 if fim > len(tokens):

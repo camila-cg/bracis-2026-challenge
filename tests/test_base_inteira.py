@@ -10,14 +10,14 @@ sys.path.insert(0, str(RAIZ / "src"))
 import eda_utils as u
 from validacao import teste_base_inteira as t
 
-# Medidos em 30/09/2026 com a frase de citação realista (atualizados após o E1). Regrediu abaixo dos
+# Medidos em 01/10/2026 com a frase de citação realista (atualizados após o A10). Regrediu abaixo dos
 # pisos (ou acima dos tetos): a mudança piorou a generalização. Melhorou: mova o
 # limite na mesma mudança.
-PISO_OK_POR_TRIBUNAL = {"STF": 196, "STJ": 168, "STM": 165, "TSE": 116, "TST": 172}
+PISO_OK_POR_TRIBUNAL = {"STF": 198, "STJ": 174, "STM": 172, "TSE": 118, "TST": 176}
 TETO_RESPOSTA_ERRADA = 0          # real_errado + inventada_errado
-TETO_NAO_EXTRAIU = 27
+TETO_NAO_EXTRAIU = 2
 TETO_EXTRAS_NA_FRASE = 0
-TETO_PREVISOES_EM_DISTRATORES = 2
+TETO_PREVISOES_EM_DISTRATORES = 1
 
 
 class FraseDeCitacao(unittest.TestCase):
