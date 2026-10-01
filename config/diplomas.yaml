@@ -8,6 +8,7 @@
     "cod de proc penal-militar", "cod de proc penal militar", "cod de proc penal", "cod de proc civil"
   ],
   "marcadores_numerados": ["art", "artigo", "§", "lei", "lei complementar", "arts", "decreto", "decr", "resolucao", "res"],
+  "orgaos_emissores_resolucao": ["cnj", "cnmp", "cjf", "csjt"],
   "termos_relatoria": ["rel", "relator", "relatora", "relatoria", "min", "ministro", "ministra"],
   "composicao_nome": ["da", "das", "de", "do", "dos", "e"],
   "apelidos_estatuto": {
