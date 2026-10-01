@@ -473,6 +473,92 @@ def procurar_classes_processuais_ambiguas(tokens):
 
 
 _OCR_DE_LEI = {"le1", "lel"}
+_ATOS_QUE_EXIGEM_IDENTIFICADOR_LOCAL = {
+    "lei", "lei complementar", "decreto", "decr",
+}
+_QUALIFICADORES_ATO = {
+    "federal", "estadual", "municipal", "distrital", "nacional",
+    "ordinaria", "organica", "presidencial", "fed", "est", "mun",
+}
+
+
+def ato_tem_identificador_local(indice, fim_indice, tokens, texto_original):
+    """Confirma número junto do ato ou artigo explícito imediatamente antes.
+
+    Evita ligar ``Lei estadual pertinente`` ou ``lei anterior`` a um número
+    solto mais adiante. Qualificadores institucionais são aceitos; para
+    ``decreto presidencial``, o indicador ``nº`` é obrigatório.
+    """
+    inicio_contexto = max(0, indice - 8)
+    contexto_anterior = tokens[inicio_contexto:indice]
+    tem_artigo = any(
+        token["normalizado"] in _MARCADORES_ARTIGO
+        for token in contexto_anterior
+    )
+    tem_numero = any(
+        re.search(r"\d", token["normalizado"])
+        for token in contexto_anterior
+    )
+    token_anterior = tokens[indice - 1]["normalizado"] if indice else ""
+    tem_artigo_anterior = (
+        tem_artigo
+        and tem_numero
+        and (
+            token_anterior in {"da", "do", "de", "na", "no"}
+            or re.search(r"\d", token_anterior) is not None
+        )
+    )
+    if tem_artigo_anterior:
+        return True
+
+    atual = fim_indice + 1
+    if atual >= len(tokens):
+        return False
+
+    separador = texto_original[tokens[fim_indice]["fim"]:tokens[atual]["inicio"]]
+    if tokens[fim_indice]["normalizado"] == "decr" and separador.startswith("."):
+        separador = separador[1:]
+    if re.search(r"[.;:!?]", separador):
+        return False
+
+    qualificador = None
+    if (
+        atual + 3 < len(tokens)
+        and [token["normalizado"] for token in tokens[atual:atual + 3]]
+        == ["do", "estado", "de"]
+        and tokens[atual + 3]["normalizado"] in UFS
+    ):
+        atual += 4
+        if atual >= len(tokens):
+            return False
+
+    if tokens[atual]["normalizado"] in _QUALIFICADORES_ATO:
+        qualificador = tokens[atual]["normalizado"]
+        atual += 1
+        if atual >= len(tokens):
+            return False
+
+    tem_indicador = tokens[atual]["normalizado"] in _INDICADORES_NUMERO_PROCESSUAL
+    if tem_indicador:
+        atual += 1
+        if atual >= len(tokens):
+            return False
+
+    if qualificador == "presidencial" and not tem_indicador:
+        return False
+    return re.search(r"\d", tokens[atual]["normalizado"]) is not None
+
+
+def acordao_esta_em_formula_de_relatoria(indice, tokens, texto_original):
+    """Reconhece ``rel. p/ o acórdão`` como parte da citação anterior."""
+    prefixo = texto_original[
+        max(0, tokens[indice]["inicio"] - 40):tokens[indice]["inicio"]
+    ]
+    return re.search(
+        r"\brel(?:\.|ator(?:a)?)?\s+(?:p\s*/?|para)\s+o\s+$",
+        prefixo,
+        re.IGNORECASE,
+    ) is not None
 
 
 def procurar_marcadores_principais(tokens, texto_original):
@@ -561,6 +647,19 @@ def procurar_marcadores_principais(tokens, texto_original):
 
         if marcador in {"res", "resolucao"} and not resolucao_tem_identificador(
             fim_indice, tokens, texto_original
+        ):
+            continue
+
+        if (
+            marcador in _ATOS_QUE_EXIGEM_IDENTIFICADOR_LOCAL
+            and not ato_tem_identificador_local(
+                indice, fim_indice, tokens, texto_original
+            )
+        ):
+            continue
+
+        if marcador == "acordao" and acordao_esta_em_formula_de_relatoria(
+            indice, tokens, texto_original
         ):
             continue
 

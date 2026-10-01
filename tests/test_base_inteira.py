@@ -17,7 +17,7 @@ PISO_OK_POR_TRIBUNAL = {"STF": 198, "STJ": 174, "STM": 172, "TSE": 118, "TST": 1
 TETO_RESPOSTA_ERRADA = 0          # real_errado + inventada_errado
 TETO_NAO_EXTRAIU = 2
 TETO_EXTRAS_NA_FRASE = 0
-TETO_PREVISOES_EM_DISTRATORES = 1
+TETO_PREVISOES_EM_DISTRATORES = 0
 
 
 class FraseDeCitacao(unittest.TestCase):

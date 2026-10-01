@@ -57,6 +57,14 @@ class OffsetsEQuebrasDeLinha(unittest.TestCase):
             ["Tema 339/STF"],
         )
 
+    def test_numero_de_outra_frase_nao_completa_marcador_vago(self):
+        texto = (
+            "A norma foi descrita apenas como 'Lei estadual pertinente'. "
+            "O marcador nº 42 identifica a caixa física, enquanto STJ e STF "
+            "aparecem no cabeçalho."
+        )
+        self.assertEqual(candidatos(texto), [])
+
     def test_barreira_numerica_preserva_abreviacoes_da_citacao(self):
         casos = (
             ("Aplica-se o art. 5º da Constituição.", "art. 5º da Constituição"),
@@ -99,6 +107,16 @@ class OffsetsEQuebrasDeLinha(unittest.TestCase):
         self.assertEqual(
             [item["trecho"] for item in candidatos(texto)],
             ["QO no IAC 15/STJ"],
+        )
+
+    def test_relatoria_para_o_acordao_nao_abre_citacao_duplicada(self):
+        texto = (
+            "AgInt no REsp 1.597.443/PR, Primeira Turma do STJ, "
+            "rel. p/ o acórdão Min. Sérgio Kukina, 2018"
+        )
+        self.assertEqual(
+            [item["trecho"] for item in candidatos(texto)],
+            [texto],
         )
 
     def test_inciso_encerra_citacao_antes_de_controles_da_frase_seguinte(self):

@@ -192,6 +192,22 @@ class GuardasContraFalsoPositivo(BaseCanonica):
                 citacoes = processar_documento("sintetico", texto, self.resolvedor)["citacoes"]
                 self.assertEqual([c["trecho"] for c in citacoes], [])
 
+    def test_numero_de_prazo_nao_identifica_lei_ou_decreto(self):
+        for texto in (
+            "A lei anterior 5 dias depois foi revogada.",
+            "O decreto presidencial 5 dias depois foi revogado.",
+        ):
+            with self.subTest(texto=texto):
+                self.assertEqual(self.citacoes(texto), [])
+
+    def test_qualificador_institucional_com_numero_continua_valido(self):
+        for texto in (
+            "a Lei estadual nº 10.000/2020, art. 2",
+            "o Decreto presidencial nº 5/2020, art. 1",
+        ):
+            with self.subTest(texto=texto):
+                self.assertEqual(len(self.citacoes(texto)), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
