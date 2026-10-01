@@ -10,9 +10,9 @@
     "precedente", "agr", "mandado de seguranca", "apelacao", "apelacao criminal", "sv",
     "ap crim", "ap criminal",
     "airr", "rrag", "pext", "embargos infringentes", "enunciado",
-    "cautelar inominada", "cautelar inominada criminal"
+    "cautelar inominada", "cautelar inominada criminal", "iac", "qo no iac"
   ],
-  "marcadores_exatos": ["apelacao", "sv", "airr", "rrag", "pext", "enunciado", "res", "decr", "decreto", "resolucao", "arts", "cf", "cod", "penal-militar", "cautelar inominada", "cautelar inominada criminal",
+  "marcadores_exatos": ["apelacao", "sv", "airr", "rrag", "pext", "enunciado", "res", "decr", "decreto", "resolucao", "arts", "cf", "cod", "penal-militar", "cautelar inominada", "cautelar inominada criminal", "iac", "qo no iac",
     "c l t", "c p c", "c p p", "c p m", "cod de proc penal-militar", "cod de proc penal militar", "cod de proc penal", "cod de proc civil"],
 
   "siglas": ["re", "resp", "aresp", "respe", "rhc", "hc", "rse", "apl", "rms", "rr", "arr", "ar", "rp", "agarr", "rcl", "recl", "agr", "agrg", "agint", "ed", "edcl", "eds", "airr", "rrag"],
@@ -39,7 +39,7 @@
     }
   },
   "marcadores_descritivos": ["acordao", "julgado", "precedente", "reclamacao"],
-  "marcadores_numerados": ["sumula", "sum", "sumula vinculante", "tema", "sv", "enunciado"],
+  "marcadores_numerados": ["sumula", "sum", "sumula vinculante", "tema", "sv", "enunciado", "iac", "qo no iac"],
   "classes_citadas": [
     {"padrao": "\\b(?:ARESP|AGRAVO\\s+(?:EM|NO)\\s+RECURSO\\s+ESPECIAL)\\b", "classe": "agravoemrecursoespecial"},
     {"padrao": "\\b(?:RESP|RECURSO\\s+ESPECIAL)\\b", "classe": "recursoespecial"},
@@ -70,7 +70,8 @@
     {"padrao": "\\b(?:MANDADO\\s+DE\\s+INJUNCAO|MI\\b(?=[\\s\\-]*(?:N[º°.]?\\s*)?\\d))", "classe": "mandadodeinjuncao"},
     {"padrao": "\\b(?:HABEAS\\s+DATA|HD\\b(?=[\\s\\-]*(?:N[º°.]?\\s*)?\\d))", "classe": "habeasdata"},
     {"padrao": "\\bAGRAVO\\s+INTERNO\\b", "classe": "agravointerno"},
-    {"padrao": "\\bEMBARGOS\\s+DE\\s+DECLARACAO\\b", "classe": "embargosdedeclaracao"}
+    {"padrao": "\\bEMBARGOS\\s+DE\\s+DECLARACAO\\b", "classe": "embargosdedeclaracao"},
+    {"padrao": "\\b(?:(?:QUESTAO|QO)\\s+(?:DE\\s+ORDEM\\s+)?NO\\s+)?(?:IAC|INCIDENTE\\s+DE\\s+ASSUNCAO\\s+DE\\s+COMPETENCIA)\\b", "classe": "incidentedeassuncaodecompetencia"}
   ],
   "classes_genericas": {
     "apelacaocriminal": "apelacao"

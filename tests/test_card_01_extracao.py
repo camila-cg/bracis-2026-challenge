@@ -83,10 +83,33 @@ class OffsetsEQuebrasDeLinha(unittest.TestCase):
         )
 
     def test_duas_citacoes_na_mesma_frase_nao_sao_fundidas(self):
-        texto = "REsp 1.741.784/PR, HC 123456 do STF"
+        for separador in (", ", " e ", " bem como "):
+            with self.subTest(separador=separador):
+                texto = f"REsp 1.741.784/PR{separador}HC 123456 do STF"
+                self.assertEqual(
+                    [item["trecho"] for item in candidatos(texto)],
+                    ["REsp 1.741.784/PR", "HC 123456 do STF"],
+                )
+
+    def test_qo_no_iac_para_no_fim_da_frase(self):
+        texto = (
+            "e com a QO no IAC 15/STJ. Registrou-se ainda 'n.º 15' à margem, "
+            "sem classe, órgão ou espécie."
+        )
         self.assertEqual(
             [item["trecho"] for item in candidatos(texto)],
-            ["REsp 1.741.784/PR", "HC 123456 do STF"],
+            ["QO no IAC 15/STJ"],
+        )
+
+    def test_inciso_encerra_citacao_antes_de_controles_da_frase_seguinte(self):
+        texto = (
+            "A providência observa a Res. CNJ nº 455, de 27-4-2022, bem como "
+            "CF, art. 93, IX. A folha 455 e o número 93, lançados no rodapé, "
+            "são controles internos."
+        )
+        self.assertEqual(
+            [item["trecho"] for item in candidatos(texto)],
+            ["Res. CNJ nº 455, de 27-4-2022", "CF, art. 93, IX"],
         )
 
     def test_span_e_exclusivo_no_fim_e_independe_do_prefixo(self):
@@ -219,6 +242,13 @@ class TiposDeCitacao(unittest.TestCase):
                 [
                     "Cód. de Proc. Penal-Militar, art. 5º, inciso II",
                     "Decreto 9.830/2019",
+                ],
+            ),
+            (
+                "Res. CNJ nº 455, de 27-4-2022, bem como CF, art. 93, IX",
+                [
+                    "Res. CNJ nº 455, de 27-4-2022",
+                    "CF, art. 93, IX",
                 ],
             ),
         )
