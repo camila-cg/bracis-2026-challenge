@@ -203,10 +203,10 @@ Internamente, a etapa segue estes subpassos:
 
 ## Reprodução e submissão
 
-A execução padrão usa somente regras e consultas à base canônica SQLite. Não
-carrega modelos de linguagem, não requer GPU nem acessa a internet durante o
-processamento, e a saída é determinística: a mesma entrada gera sempre o mesmo
-`submission.csv`.
+A entrega oficial combina as regras, consultas à base canônica SQLite e o
+detector BERTimbau treinado. A imagem usa GPU NVIDIA, não depende de Ollama e
+não acessa a internet durante a execução. O snapshot imutável do modelo é
+baixado durante o build e incorporado à própria imagem.
 
 ### Ambiente
 
@@ -244,15 +244,20 @@ usam as regras determinísticas como fallback. Use `--logs <pasta>` para alterar
 o destino dos registros. Falhas globais, como banco ou configuração inválidos,
 continuam interrompendo a execução.
 
-**Alternativa com Docker** (mesmas versões do `uv.lock`; os dados são montados, não copiados para a imagem):
+**Execução oficial com Docker** (uma única imagem; os dados são montados, não
+copiados para ela):
 
 ```bash
 docker build -t bracis-2026 .
-docker run --rm -v "$PWD/data:/app/data" -v "$PWD/saida:/app/saida" bracis-2026
+docker run --rm --gpus all \
+  -v "$PWD/data:/entrada:ro" -v "$PWD/saida:/saida" \
+  bracis-2026 \
+  /entrada/desafio1_bracis.db /entrada/txt /saida/submission.csv
 ```
 
-Argumentos após o nome da imagem vão para o pipeline (ex.: `... bracis-2026 --avaliar`).
-No PowerShell, troque `$PWD` por `${PWD}`.
+A entrada única recebe, nessa ordem, o banco SQLite, a pasta de documentos TXT
+e o caminho exato do CSV de saída. No PowerShell, troque `$PWD` por `${PWD}`.
+O contêiner é executado com `HF_HUB_OFFLINE=1` e `TRANSFORMERS_OFFLINE=1`.
 
 ### Submeter no Kaggle
 
@@ -329,14 +334,14 @@ src/
 ├── pipeline.py      orquestra o processamento de ponta a ponta
 ├── steps/           etapas de extração, resolução e geração da saída
 ├── validacao/       gates de generalização e robustez
-└── ml_citacoes/     experimentos opcionais de detecção e verificação
+└── ml_citacoes/     detector BERTimbau e experimentos de verificação
 tests/               testes unitários, integração e regressão
 saida/               JSONs, CSV e pacotes produzidos
 ```
 
-O pipeline reproduzível descrito neste README usa o fluxo baseado em regras e
-SQLite. Os módulos de `src/ml_citacoes/` são extensões experimentais opcionais e
-não são necessários para gerar a submissão padrão.
+O pipeline oficial na imagem usa o fluxo híbrido de regras, SQLite e detector
+BERTimbau. Backends experimentais de verificação, inclusive Ollama, não fazem
+parte da execução entregue.
 
 ## Documentação relacionada
 

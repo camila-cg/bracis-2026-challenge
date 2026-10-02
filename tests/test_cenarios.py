@@ -322,6 +322,19 @@ class SaidaDaSubmissao(unittest.TestCase):
             {"documento_id": "sem_citacao", "citacoes": "-"},
         ])
 
+    def test_csv_pode_ser_gravado_no_caminho_exato_exigido(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            raiz = Path(pasta)
+            arquivo_csv = raiz / "montagem" / "resultado-final.csv"
+            csv_saida = gravar_saida(
+                [{"documento_id": "doc", "citacoes": []}],
+                raiz / "diagnosticos",
+                arquivo_csv=arquivo_csv,
+            )
+            self.assertEqual(csv_saida, arquivo_csv)
+            self.assertTrue(arquivo_csv.is_file())
+            self.assertTrue((raiz / "diagnosticos" / "json" / "doc.json").is_file())
+
 
 if __name__ == "__main__":
     unittest.main()

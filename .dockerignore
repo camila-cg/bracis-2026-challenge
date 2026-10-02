@@ -5,6 +5,9 @@
 .tmp-tests/
 **/__pycache__/
 .ipynb_checkpoints/
-data/
+# Os dados do desafio nunca entram na imagem, mas o conversor oficial faz
+# parte do runtime e precisa estar disponível em uma máquina limpa.
+data/*
+!data/json_to_submission.py
 saida/
 planejamento-*.md

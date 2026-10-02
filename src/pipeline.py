@@ -271,6 +271,11 @@ def main() -> None:
     parser.add_argument("--db", type=Path, default=DADOS / "desafio1_bracis.db")
     parser.add_argument("--saida", type=Path, default=RAIZ / "saida")
     parser.add_argument("--logs", type=Path, default=RAIZ / "logs")
+    parser.add_argument(
+        "--arquivo-saida",
+        type=Path,
+        help="caminho exato do CSV final; o padrão é <saida>/submission.csv",
+    )
     parser.add_argument("--avaliar", action="store_true", help="pontua contra data/goldenset_offsets.csv")
     parser.add_argument("--goldenset", type=Path, default=DADOS / "goldenset_offsets.csv")
     parser.add_argument("--modelo-citacoes", type=Path, help="artefato LoRA local; omitido mantém regras idênticas")
@@ -352,7 +357,9 @@ def main() -> None:
             f"{documentos_com_erro} documento(s) -> {log_erros}"
         )
     print(f"debug da extração: {gravar_debug_extracao(debug_extracao, RAIZ / 'outputs')}")
-    submission_csv = gravar_saida(documentos, args.saida)                                   # 7
+    submission_csv = gravar_saida(
+        documentos, args.saida, arquivo_csv=args.arquivo_saida,
+    )                                                                                       # 7
 
     if args.avaliar:
         imprimir_avaliacao(avaliar(submission_csv, args.goldenset))

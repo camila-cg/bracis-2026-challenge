@@ -1,36 +1,25 @@
 # Setup e execução
 
-Há três formas de rodar o pipeline: com **uv** (recomendada), com **pip** ou com **Docker**.
-Todas geram o mesmo resultado. Execute os comandos na raiz do repositório.
-
-A solução usa só regras (regex) e consultas à base SQLite: não precisa de GPU,
-de modelos nem de internet durante a execução (só para instalar as dependências).
+O repositório permite desenvolvimento local com **uv** ou **pip**, mas a entrega
+oficial do desafio é uma única imagem **Docker** com regras, SQLite e o detector
+BERTimbau. Execute os comandos na raiz do repositório.
 
 ## Imagem Docker com BERTimbau Large (sem Ollama)
 
-A variante ML usa `Dockerfile.ml` e incorpora no build o modelo público
+A imagem definida pelo único `Dockerfile` incorpora no build o modelo público
 `giovannalavouras/bertimbau-large-citacoes-juridicas`, fixado pela revisão
 `44697e852ef12493d0c9f560ad7da1e513dcdb35`. O contêiner não acessa a internet
 durante a execução e não depende de Ollama. O host precisa de GPU NVIDIA, driver
 compatível e NVIDIA Container Toolkit configurado.
 
 ```powershell
-docker build -f Dockerfile.ml -t bracis-2026-ml .
+docker build -t bracis-2026 .
 
 docker run --rm --gpus all `
-  -v "${PWD}/data:/app/data:ro" `
-  -v "${PWD}/saida:/app/saida" `
-  bracis-2026-ml
-```
-
-Argumentos adicionais são repassados ao pipeline. Por exemplo, para pontuar no
-golden set montado em `data/`:
-
-```powershell
-docker run --rm --gpus all `
-  -v "${PWD}/data:/app/data:ro" `
-  -v "${PWD}/saida:/app/saida" `
-  bracis-2026-ml --avaliar
+  -v "${PWD}/data:/entrada:ro" `
+  -v "${PWD}/saida:/saida" `
+  bracis-2026 `
+  /entrada/desafio1_bracis.db /entrada/txt /saida/submission.csv
 ```
 
 O download do Hugging Face ocorre apenas em `docker build`; por isso o build
@@ -59,7 +48,7 @@ uv run --no-default-groups python src/pipeline.py
 uv run --no-default-groups python src/empacotar_submissao.py
 ```
 
-### Com Docker (requer git, Docker Desktop aberto e Python 3.10+ para o passo 5)
+### Com Docker (requer Docker com GPU NVIDIA habilitada)
 
 ```powershell
 # 1. entrar na pasta do repositório
@@ -71,7 +60,10 @@ cd bracis-2026-challenge
 docker build -t bracis-2026 .
 
 # 4. gerar as predições (saida\submission.csv)
-docker run --rm -v "${PWD}/data:/app/data" -v "${PWD}/saida:/app/saida" bracis-2026
+docker run --rm --gpus all `
+  -v "${PWD}/data:/entrada:ro" -v "${PWD}/saida:/saida" `
+  bracis-2026 `
+  /entrada/desafio1_bracis.db /entrada/txt /saida/submission.csv
 
 # 5. validar e empacotar (saida\submissao_<commit>\), fora do container
 python src/empacotar_submissao.py
@@ -144,23 +136,31 @@ python3 -m venv .venv
 
 ## 3. Execução com Docker
 
-Requer o Docker (no Windows, o Docker Desktop precisa estar aberto). A imagem
-usa as mesmas versões do `uv.lock`. Os dados não são copiados para a imagem:
-`data/` e `saida/` são montadas no container.
+Requer Docker, GPU NVIDIA e o NVIDIA Container Toolkit (no Windows, Docker
+Desktop com backend WSL2). A imagem usa as versões do `uv.lock`. Os dados não
+são copiados para a imagem: as pastas de entrada e saída são montadas no
+contêiner.
 
 ```bash
 docker build -t bracis-2026 .
-docker run --rm -v "$PWD/data:/app/data" -v "$PWD/saida:/app/saida" bracis-2026
+docker run --rm --gpus all \
+  -v "$PWD/data:/entrada:ro" -v "$PWD/saida:/saida" \
+  bracis-2026 \
+  /entrada/desafio1_bracis.db /entrada/txt /saida/submission.csv
 ```
 
 No PowerShell:
 
 ```powershell
 docker build -t bracis-2026 .
-docker run --rm -v "${PWD}/data:/app/data" -v "${PWD}/saida:/app/saida" bracis-2026
+docker run --rm --gpus all `
+  -v "${PWD}/data:/entrada:ro" -v "${PWD}/saida:/saida" `
+  bracis-2026 `
+  /entrada/desafio1_bracis.db /entrada/txt /saida/submission.csv
 ```
 
-Argumentos depois do nome da imagem vão para o pipeline, ex.: `... bracis-2026 --avaliar`.
+A entrada recebe exatamente três argumentos posicionais: banco SQLite, pasta de
+TXT e arquivo CSV final.
 Só é preciso refazer o `docker build` quando o código ou as dependências mudarem.
 
 ## 4. Saídas e opções
