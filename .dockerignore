@@ -1,13 +1,13 @@
-.git/
-.venv/
-.uv-cache/
-.hf-cache/
-.tmp-tests/
-**/__pycache__/
-.ipynb_checkpoints/
-# Os dados do desafio nunca entram na imagem, mas o conversor oficial faz
-# parte do runtime e precisa estar disponível em uma máquina limpa.
-data/*
+# Contexto allowlist: apenas arquivos necessários ao build/runtime são enviados
+# ao daemon. Dados privados, caches, saídas e arquivos não rastreados ficam fora.
+*
+!pyproject.toml
+!uv.lock
+!.python-version
+!run.sh
+!config/
+!config/**
+!src/
+!src/**
+!data/
 !data/json_to_submission.py
-saida/
-planejamento-*.md

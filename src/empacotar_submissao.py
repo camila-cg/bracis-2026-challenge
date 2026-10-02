@@ -37,7 +37,12 @@ if hasattr(sys.stdout, "reconfigure"):
 RAIZ = Path(__file__).resolve().parents[1]
 CLASSES = {"real", "inventada", "incompleta"}
 CITACAO = re.compile(r"^(\d+),(\d+),([a-z]+),([^,|]+),(-|\d+(?:\.\d+)?)$")
-COMANDO = "uv sync --no-default-groups && uv run --no-default-groups python src/pipeline.py"
+COMANDO = (
+    "docker build -t bracis-2026 . && "
+    'docker run --rm --gpus all --network none -v "$PWD/data:/entrada:ro" '
+    '-v "$PWD/saida:/saida" bracis-2026 '
+    "/entrada/desafio1_bracis.db /entrada/txt /saida/submission.csv"
+)
 
 
 def validar(csv_path: Path, pasta_txt: Path) -> list[str]:

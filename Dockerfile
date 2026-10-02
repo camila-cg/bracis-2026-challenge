@@ -4,7 +4,7 @@
 # Build:
 #   docker build -t bracis-2026 .
 # Run:
-#   docker run --rm --gpus all \
+#   docker run --rm --gpus all --network none \
 #     -v /dados:/entrada:ro -v /saida:/saida \
 #     bracis-2026 /entrada/desafio.db /entrada/txt /saida/submission.csv
 
@@ -28,7 +28,10 @@ RUN .venv/bin/python -c "from huggingface_hub import snapshot_download; snapshot
 ENV HF_HUB_OFFLINE=1 \
     TRANSFORMERS_OFFLINE=1
 
-COPY . .
+COPY config/ ./config/
+COPY src/ ./src/
+COPY data/json_to_submission.py ./data/json_to_submission.py
+COPY run.sh ./run.sh
 RUN chmod 0555 /app/run.sh
 
 ENTRYPOINT ["/app/run.sh"]
