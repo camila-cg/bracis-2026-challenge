@@ -305,9 +305,32 @@ Com uv:
 uv sync --locked
 ```
 
-Com pip, o `requirements.txt` já inclui esses pacotes.
+O `requirements.txt` é apenas o fallback mínimo do pipeline padrão e não inclui
+as ferramentas de notebooks. Para trabalhar com os notebooks, use o fluxo com
+`uv`, que mantém as versões no `uv.lock`.
 
 No VS Code, selecione como kernel o Python do `.venv` do projeto. Se aparecer o aviso
 de que é preciso instalar `ipykernel` e `pip`, o ambiente foi criado com
 `--no-default-groups`: rode `uv sync --locked` e reinicie o kernel. Os notebooks localizam a
 raiz do projeto sozinhos, então podem ser abertos de qualquer pasta dentro do repositório.
+
+## 8. Extensões opcionais de ML e LLM
+
+As dependências experimentais são mantidas como grupos no `pyproject.toml`; não
+há arquivos `requirements` separados para elas. Para treinar ou executar o
+detector BIO/BERTimbau, instale o grupo `ml`:
+
+```bash
+uv sync --group ml
+```
+
+Para usar o verificador Llama local em 4 bits junto com o detector, instale os
+dois grupos. Esse fluxo requer GPU NVIDIA compatível com CUDA:
+
+```bash
+uv sync --group ml --group llm
+```
+
+O backend Ollama não precisa do grupo `llm`, pois o modelo roda no processo do
+Ollama. Ele ainda precisa do grupo `ml` quando o pipeline usa o detector BIO via
+`--modelo-citacoes`.

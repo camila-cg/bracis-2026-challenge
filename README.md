@@ -221,7 +221,8 @@ baixado durante o build e incorporado à própria imagem.
   partir de 3.10) e [uv](https://docs.astral.sh/uv/) com `pyproject.toml` +
   `uv.lock`;
 - `requirements.txt` é uma alternativa sem versões totalmente travadas para a
-  baseline de regras e notebooks, não para reproduzir a imagem oficial.
+  baseline de regras, não para notebooks nem para reproduzir a imagem oficial
+  (ver [SETUP.md](SETUP.md)).
 
 ### Dados
 
@@ -431,7 +432,9 @@ saida/               JSONs, CSV e pacotes produzidos
 
 O pipeline oficial na imagem usa o fluxo híbrido de regras, SQLite e detector
 BERTimbau. Backends experimentais de verificação, inclusive Ollama, não fazem
-parte da execução entregue.
+parte da execução entregue. As dependências ficam nos grupos `ml` e `llm` do
+`pyproject.toml`, instalados com `uv`; consulte o
+[guia de setup](SETUP.md#8-extensões-opcionais-de-ml-e-llm).
 
 ## Documentação relacionada
 
