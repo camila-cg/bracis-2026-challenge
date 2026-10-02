@@ -1,9 +1,7 @@
 """Contrato mínimo da imagem oficial e de sua documentação."""
 
+import json
 from pathlib import Path
-
-from empacotar_submissao import COMANDO
-
 
 RAIZ = Path(__file__).resolve().parents[1]
 MODELO = "giovannalavouras/bertimbau-large-citacoes-juridicas"
@@ -35,13 +33,19 @@ def test_modelo_e_revisao_sao_os_mesmos_em_todos_os_pontos_de_entrada():
         assert MODELO in conteudo
         assert REVISAO in conteudo
 
-    assert "--modelo-citacoes /opt/models/bertimbau-large-citacoes-juridicas" in _ler("run.sh")
+    script = _ler("run.sh")
+    assert "--modelo-citacoes /opt/models/bertimbau-large-citacoes-juridicas" in script
+    assert "--falhar-em-erros" in script
+    assert '--dispositivo-modelo "${BRACIS_DISPOSITIVO:-cuda}"' in script
+    assert 'work_path=${BRACIS_WORK_DIR:-"$output_dir/.bracis-work"}' in script
+    assert '--logs "$work_path/logs"' in script
 
 
-def test_bundle_documenta_o_docker_oficial_offline():
-    assert COMANDO.startswith("docker build -t bracis-2026 .")
-    assert "docker run --rm --gpus all --network none" in COMANDO
-    assert "/saida/submission.csv" in COMANDO
+def test_inferencia_oficial_congela_limiares_do_model_card():
+    configuracao = json.loads(_ler("config/pipeline.yaml"))
+    assert configuracao["limiares_modelo"] == {"LEI": 0.99, "JUR": 0.99}
+    model_card = _ler("artefatos/ml_large/bertimbau/final/adaptador/README.md")
+    assert "--limiar-lei 0.99 --limiar-jur 0.99" in model_card
 
 
 def test_readme_destaca_docker_e_tambem_expoe_execucao_local():
@@ -49,3 +53,12 @@ def test_readme_destaca_docker_e_tambem_expoe_execucao_local():
     assert "### Execução oficial: Docker híbrido" in readme
     assert "### Execução local pelo script" in readme
     assert "python src/pipeline.py --modelo-citacoes" in readme
+    assert "docker run --rm --gpus all --network none" in readme
+    assert "BRACIS_DISPOSITIVO=cpu" in readme
+    assert "--dispositivo-modelo cuda" in readme
+    assert "--dispositivo-modelo cpu" in readme
+
+
+def test_smoke_cpu_declara_dispositivo_explicitamente():
+    workflow = _ler(".github/workflows/docker-smoke.yml")
+    assert "BRACIS_DISPOSITIVO=cpu" in workflow

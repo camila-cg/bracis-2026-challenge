@@ -2,6 +2,7 @@
 
 import csv
 import json
+import sys
 import tempfile
 import unittest
 from datetime import datetime
@@ -11,13 +12,47 @@ from unittest.mock import Mock, patch
 
 from pipeline import (
     gravar_log_erros,
+    main,
     processar_arquivo,
     processar_documento,
+    resolver_candidatos,
 )
 from steps.salvar_submissao import gravar_saida
 
 
 class ResilienciaPorArquivo(unittest.TestCase):
+    def test_modo_estrito_nao_grava_submissao_parcial(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            raiz = Path(tmp)
+            textos = raiz / "txt"
+            textos.mkdir()
+            (textos / "doc.txt").write_text("texto", encoding="utf-8")
+            banco = raiz / "base.db"
+            banco.touch()
+
+            def falhar(_arquivo, _resolvedor, **kwargs):
+                kwargs["erros_processamento"].append({"documento_id": "doc"})
+                return {"documento_id": "doc", "citacoes": []}
+
+            argumentos = [
+                "pipeline.py",
+                "--txt", str(textos),
+                "--db", str(banco),
+                "--saida", str(raiz / "saida"),
+                "--falhar-em-erros",
+            ]
+            with patch.object(sys, "argv", argumentos), patch(
+                "pipeline.sqlite3.connect", return_value=Mock()
+            ), patch("pipeline.Resolvedor", return_value=Mock()), patch(
+                "pipeline.processar_arquivo", side_effect=falhar
+            ), patch(
+                "pipeline.gravar_log_erros", return_value=raiz / "logs" / "erros.jsonl"
+            ), patch("pipeline.gravar_saida") as gravar:
+                with self.assertRaisesRegex(SystemExit, "nenhuma submissão foi gerada"):
+                    main()
+
+            gravar.assert_not_called()
+
     def test_arquivo_invalido_mantem_linha_vazia_e_nao_interrompe_o_lote(self):
         with tempfile.TemporaryDirectory() as tmp:
             raiz = Path(tmp)
@@ -68,6 +103,23 @@ class ResilienciaPorArquivo(unittest.TestCase):
 
 
 class ResilienciaPorEtapa(unittest.TestCase):
+    def test_resolver_candidatos_e_estrito_sem_coletor_de_erros(self):
+        candidato = {"tipo": "lei", "inicio": 0, "fim": 1}
+        with self.assertRaises(KeyError):
+            resolver_candidatos("doc", "x", [candidato], Mock())
+
+    def test_detector_usa_limiares_versionados_quando_cli_nao_sobrescreve(self):
+        detector = Mock(decodificador="viterbi")
+        detector.detectar.return_value = []
+        fusao = SimpleNamespace(candidatos=(), eventos=())
+
+        with patch("pipeline.extrair", return_value=[]), patch(
+            "pipeline.filtrar_distratores", return_value=[]
+        ), patch("ml_citacoes.fusao.fusionar", return_value=fusao) as combinar:
+            processar_documento("doc", "texto", Mock(), detector_bio=detector)
+
+        self.assertEqual(combinar.call_args.kwargs["limiares"], {"LEI": 0.99, "JUR": 0.99})
+
     def test_citacao_invalida_e_descartada_sem_perder_as_demais(self):
         texto = "art. 5º da CF"
         candidatos = [

@@ -9,6 +9,18 @@ from .bio import bio_para_spans, combinar_logits_janelas
 from .contratos import CitacaoModelo
 
 
+def _dispositivo_inferencia(torch, solicitado: str = "auto") -> str:
+    """Resolve ``auto``/``cuda``/``cpu`` sem mascarar CUDA indisponível."""
+    if solicitado not in {"auto", "cuda", "cpu"}:
+        raise ValueError("dispositivo deve ser auto, cuda ou cpu")
+    if solicitado == "cpu":
+        return "cpu"
+    cuda_disponivel = torch.cuda.is_available()
+    if solicitado == "cuda" and not cuda_disponivel:
+        raise RuntimeError("CUDA foi solicitado, mas não está disponível")
+    return "cuda" if cuda_disponivel else "cpu"
+
+
 class DetectorBIO:
     """Adaptador opcional. Dependências pesadas são importadas apenas ao ativá-lo."""
 
@@ -31,7 +43,8 @@ class DetectorBIO:
 
     @classmethod
     def de_artefato(cls, pasta: Path, *, permitir_download: bool = False,
-                   decodificador: str = "viterbi", lote_janelas: int = 8) -> "DetectorBIO":
+                   decodificador: str = "viterbi", lote_janelas: int = 8,
+                   dispositivo: str = "auto") -> "DetectorBIO":
         # A inferência carrega o artefato somente para leitura.
         if decodificador not in {"argmax", "viterbi"}:
             raise ValueError("decodificador deve ser argmax ou viterbi")
@@ -91,8 +104,7 @@ class DetectorBIO:
                 "com config.json e model.safetensors"
             )
         modelo.eval()
-        if torch.cuda.is_available():
-            modelo.to("cuda")
+        modelo.to(_dispositivo_inferencia(torch, dispositivo))
         return cls(
             tokenizer, modelo,
             max_length=max_length,

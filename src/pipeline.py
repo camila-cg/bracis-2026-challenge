@@ -39,6 +39,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 import eda_utils as u
 import indice_utils as ind  # noqa: F401 — usado por src/validacao via p.ind
+from configuracao import carregar_config
 from steps.pipeline_utils import DADOS, RAIZ
 from steps.extrair_candidatos import extrair, gravar_debug_extracao  # 1
 from steps.filtrar_distratores import e_distrator, filtrar_distratores     # 2
@@ -139,7 +140,7 @@ def processar_documento(
             limiares = limiares_modelo
             if limiares is None:
                 limiares = ({"LEI": 0.0, "JUR": 0.0} if verificador_citacoes is not None
-                            else {"LEI": 0.95, "JUR": 0.95})
+                            else carregar_config("pipeline")["limiares_modelo"])
             fusao = fusionar(
                 candidatos,
                 detector_bio.detectar(texto),
@@ -161,6 +162,34 @@ def processar_documento(
                 exc,
                 "fallback_para_regras",
             )
+    return resolver_candidatos(
+        documento_id,
+        texto,
+        candidatos,
+        resolvedor,
+        eventos_deteccao=eventos_deteccao if detector_executado else None,
+        decodificador_bio=detector_bio.decodificador if detector_executado else None,
+        erros_processamento=erros_processamento,
+    )
+
+
+def resolver_candidatos(
+    documento_id: str,
+    texto: str,
+    candidatos: list[dict],
+    resolvedor: Resolvedor,
+    *,
+    eventos_deteccao: list[dict] | None = None,
+    decodificador_bio: str | None = None,
+    erros_processamento: list[dict] | None = None,
+) -> dict:
+    """Aplica roteamento, normalização e resolução a candidatos já detectados.
+
+    A função é também o ponto comum das ablações de regras, modelo e fusão. Sem
+    ``erros_processamento`` ela opera em modo estrito e propaga qualquer falha;
+    a execução tolerante do pipeline continua registrando e descartando apenas
+    a citação problemática.
+    """
     citacoes = []
     for candidato in candidatos:
         etapa = "roteamento"
@@ -211,9 +240,10 @@ def processar_documento(
                 contexto=_resumir_candidato(candidato),
             )
     documento = {"documento_id": documento_id, "citacoes": citacoes}
-    if detector_executado:
+    if eventos_deteccao is not None:
         documento["eventos_deteccao"] = eventos_deteccao
-        documento["decodificador_bio"] = detector_bio.decodificador
+    if decodificador_bio is not None:
+        documento["decodificador_bio"] = decodificador_bio
     return documento
 
 
@@ -286,6 +316,12 @@ def main() -> None:
     parser.add_argument("--decodificador-bio", choices=["viterbi", "argmax"], default="viterbi",
                         help="Viterbi padrão; argmax disponível como alternativa")
     parser.add_argument("--lote-janelas-bio", type=int, default=8)
+    parser.add_argument(
+        "--dispositivo-modelo",
+        choices=["auto", "cuda", "cpu"],
+        default="auto",
+        help="auto usa CUDA quando disponível; cuda exige GPU; cpu força CPU",
+    )
     parser.add_argument("--limiar-lei", type=float)
     parser.add_argument("--limiar-jur", type=float)
     parser.add_argument("--verificador-llm", type=str,
@@ -293,6 +329,11 @@ def main() -> None:
     parser.add_argument("--revisao-verificador", help="revisão exata obrigatória para ID remoto")
     parser.add_argument("--permitir-download-verificador", action="store_true")
     parser.add_argument("--lote-verificador", type=int, default=8)
+    parser.add_argument(
+        "--falhar-em-erros",
+        action="store_true",
+        help="encerra com erro sem gerar CSV se qualquer documento, citação ou modelo falhar",
+    )
     args = parser.parse_args()
 
     arquivos = sorted(args.txt.glob("*.txt"))
@@ -308,6 +349,7 @@ def main() -> None:
             args.modelo_citacoes,
             decodificador=args.decodificador_bio,
             lote_janelas=args.lote_janelas_bio,
+            dispositivo=args.dispositivo_modelo,
         )
     verificador_citacoes = None
     if args.verificador_llm is not None:
@@ -322,6 +364,10 @@ def main() -> None:
         )
     if (args.limiar_lei is None) != (args.limiar_jur is None):
         sys.exit("informe os dois limiares ou omita ambos")
+    if args.limiar_lei is not None and not (
+        0.0 <= args.limiar_lei <= 1.0 and 0.0 <= args.limiar_jur <= 1.0
+    ):
+        sys.exit("os limiares do modelo devem estar entre 0 e 1")
     limiares_modelo = None if args.limiar_lei is None else {
         "LEI": args.limiar_lei, "JUR": args.limiar_jur,
     }
@@ -347,6 +393,11 @@ def main() -> None:
             f"atenção: {len(erros_processamento)} erro(s) recuperável(is) em "
             f"{documentos_com_erro} documento(s) -> {log_erros}"
         )
+        if args.falhar_em_erros:
+            sys.exit(
+                "execução estrita interrompida: nenhuma submissão foi gerada; "
+                f"consulte {log_erros}"
+            )
     print(f"debug da extração: {gravar_debug_extracao(debug_extracao, RAIZ / 'outputs')}")
     submission_csv = gravar_saida(
         documentos, args.saida, arquivo_csv=args.arquivo_saida,

@@ -26,8 +26,9 @@ cada trecho e consulta a base canônica para decidir a classificação.
 
 Na imagem oficial, o detector BERTimbau propõe spans adicionais e suas
 predições são fusionadas de forma conservadora com os candidatos das regras.
-As regras são preservadas quando há concordância ou conflito e também servem de
-fallback se o detector não puder processar um documento.
+As regras são preservadas quando há concordância ou conflito. Na execução local
+tolerante elas também servem de fallback; o Docker oficial trata uma falha do
+detector como fatal para não mascarar uma execução sem o modelo.
 
 ```text
 documentos .txt
@@ -209,13 +210,14 @@ Internamente, a etapa segue estes subpassos:
 ## Reprodução e submissão
 
 A entrega oficial combina as regras, consultas à base canônica SQLite e o
-detector BERTimbau treinado. A imagem usa GPU NVIDIA e executa offline. O
-snapshot imutável do modelo é baixado durante o build e incorporado à própria
-imagem.
+detector BERTimbau treinado. **Docker com GPU NVIDIA é o caminho padrão**; a
+execução em CPU continua disponível como alternativa explícita.
+O snapshot imutável do modelo é baixado durante o build, incorporado à imagem e
+executado offline.
 
 ### Ambiente
 
-- entrega oficial: Docker, GPU NVIDIA, driver compatível e NVIDIA Container
+- entrega oficial: Docker com GPU NVIDIA, driver compatível e NVIDIA Container
   Toolkit;
 - execução local: Python 3.12 (fixado em `.python-version`; código compatível a
   partir de 3.10) e [uv](https://docs.astral.sh/uv/) com `pyproject.toml` +
@@ -250,13 +252,23 @@ docker run --rm --gpus all --network none \
   /entrada/desafio1_bracis.db /entrada/txt /saida/submission.csv
 ```
 
+O comando acima é o padrão e exige CUDA disponível. Para executar no Docker sem
+GPU, omita `--gpus all` **e** selecione CPU explicitamente:
+
+```bash
+docker run --rm --network none -e BRACIS_DISPOSITIVO=cpu \
+  -v "$PWD/data:/entrada:ro" -v "$PWD/saida:/saida" \
+  bracis-2026 \
+  /entrada/desafio1_bracis.db /entrada/txt /saida/submission.csv
+```
+
 O entrypoint da imagem recebe, nessa ordem, o banco SQLite, a pasta de documentos
 TXT e o caminho exato do CSV de saída. Para o arquivo persistir após `--rm`, esse
 caminho deve ficar dentro do volume de saída — no exemplo, `/saida/`. O build
 precisa de internet para obter o
 snapshot fixado do modelo; a execução posterior usa `HF_HUB_OFFLINE=1`,
 `TRANSFORMERS_OFFLINE=1` e não acessa a rede. Consulte o comando equivalente
-para PowerShell e os pré-requisitos de GPU no [guia de setup](SETUP.md).
+para PowerShell e a alternativa explícita em CPU no [guia de setup](SETUP.md).
 
 ### Execução local pelo script
 
@@ -267,8 +279,13 @@ grupo ML, baixe uma vez a revisão fixada e informe a pasta ao pipeline:
 MODELO_LOCAL=".hf-cache/bertimbau-large-citacoes-juridicas"
 uv sync --locked --no-default-groups --group ml
 uv run --locked --no-default-groups --group ml --no-sync hf download giovannalavouras/bertimbau-large-citacoes-juridicas --revision 44697e852ef12493d0c9f560ad7da1e513dcdb35 --local-dir "$MODELO_LOCAL"
-uv run --locked --no-default-groups --group ml --no-sync python src/pipeline.py --modelo-citacoes "$MODELO_LOCAL"
+uv run --locked --no-default-groups --group ml --no-sync python src/pipeline.py --modelo-citacoes "$MODELO_LOCAL" --dispositivo-modelo cuda
 ```
+
+Para executar localmente sem GPU, troque o último argumento por
+`--dispositivo-modelo cpu`. O valor `auto` também é aceito e escolhe CUDA quando
+disponível, com fallback para CPU; os exemplos principais usam `cuda` para
+deixar explícito o contrato padrão.
 
 Essa forma também gera `saida/json/<documento_id>.json` e
 `saida/submission.csv`. Ela é útil para desenvolvimento e inspeção dos
@@ -279,7 +296,7 @@ Acrescente `--avaliar` ao último comando para pontuar o fluxo híbrido localmen
 O wrapper Docker aceita somente os três argumentos posicionais e gera a
 submissão; ele não executa `--avaliar`.
 
-#### Baseline leve: CPU + regras
+#### Baseline leve: somente regras
 
 Para desenvolvimento rápido, testes e depuração das regras, é possível executar
 sem o detector neural:
@@ -301,30 +318,23 @@ usam as regras determinísticas como fallback. Use `--logs <pasta>` para alterar
 o destino dos registros. Falhas globais, como banco ou configuração inválidos,
 continuam interrompendo a execução.
 
-No contêiner, somente o CSV informado no terceiro argumento é persistido pelo
-comando acima. JSONs de diagnóstico, logs e o CSV de extração ficam no espaço
-temporário do contêiner. A seção de saídas do [guia de setup](SETUP.md) explica
-como executar localmente quando esses artefatos também forem necessários.
+Esse comportamento tolerante é destinado ao desenvolvimento local. O entrypoint
+Docker ativa `--falhar-em-erros`: qualquer fallback, descarte por exceção ou
+documento inválido interrompe a execução sem produzir uma submissão parcial. O
+CSV final e os diagnósticos em `.bracis-work/` persistem no volume de saída; em
+caso de falha, consulte `.bracis-work/logs/`.
 
-### Submeter no Kaggle
+### ZIP opcional
 
-O empacotamento requer Git e Python 3.10+ no host, mesmo quando a predição foi
-gerada no Docker. No Windows, `py -3` pode substituir `python`.
+O CSV produzido já é a saída final do pipeline. Se outro processo exigir um
+arquivo ZIP, gere-o opcionalmente com Python 3.10+:
 
 ```bash
 python src/empacotar_submissao.py
 ```
 
-Valida o `submission.csv` (cabeçalho, um `documento_id` por `.txt`, nenhuma célula
-vazia, formato de cada citação) e cria `saida/submissao_<commit>/` com:
-
-- `submission.csv` / `submission.zip`: o arquivo enviado no Kaggle
-  (*Submit Prediction → File Upload*). Na descrição da submissão, anote o commit;
-- `bundle_<commit>.zip`: o código exatamente nesse commit e um `comando.txt`,
-  para a verificação de reprodutibilidade.
-
-O script exige que as mudanças estejam commitadas, para o commit do nome ser o
-que de fato gerou as saídas.
+O utilitário apenas cria `saida/submission.zip`; ele não é uma
+etapa obrigatória, não representa o fluxo de entrega e não empacota o código.
 
 ### Testes
 
@@ -334,8 +344,8 @@ uv run --locked --no-default-groups --group dev --no-sync pytest -q
 ```
 
 Sem `data/desafio1_bracis.db`, os testes que dependem da base são pulados. A seção 6
-do [SETUP.md](SETUP.md) descreve os gates de generalização (registro de regressão,
-holdout sintético e base inteira), os dados necessários e o uso com WSL.
+do [SETUP.md](SETUP.md) distingue os gates de regressão/robustez do gate híbrido
+com auditoria de vazamento, além de listar os dados necessários e o uso com WSL.
 
 ## Detalhes de implementação
 
@@ -346,6 +356,9 @@ Os vocabulários e parâmetros editáveis ficam em `config/`: `tribunais.yaml`
 `diplomas.yaml` (marcadores legais, apelidos e IDs da base), `regras_ocr.yaml`
 (trocas de letras por dígitos) e `pipeline.yaml` (limiares e confiança).
 Os arquivos usam o subconjunto JSON de YAML 1.2, lido sem dependências extras.
+Os limiares da inferência neural oficial ficam em
+`pipeline.yaml > limiares_modelo` e estão congelados em `0.99` para `LEI` e
+`JUR`, em acordo com o model card versionado.
 As mudanças são carregadas ao iniciar o processo; reinicie o pipeline após editar.
 A ordem de `classes_citadas` e `apelidos_estatuto` é significativa, pois a primeira
 correspondência prevalece. Reavalie com `python src/pipeline.py --avaliar` após

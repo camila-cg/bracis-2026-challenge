@@ -3,10 +3,11 @@
 #
 # Build:
 #   docker build -t bracis-2026 .
-# Run:
+# Run oficial com GPU (para CPU, omita "--gpus all" e use
+# "-e BRACIS_DISPOSITIVO=cpu"):
 #   docker run --rm --gpus all --network none \
 #     -v /dados:/entrada:ro -v /saida:/saida \
-#     bracis-2026 /entrada/desafio.db /entrada/txt /saida/submission.csv
+#     bracis-2026 /entrada/desafio1_bracis.db /entrada/txt /saida/submission.csv
 
 FROM python:3.12-slim-bookworm
 COPY --from=ghcr.io/astral-sh/uv:0.11.9 /uv /usr/local/bin/uv

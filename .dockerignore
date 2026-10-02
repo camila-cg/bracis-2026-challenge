@@ -1,5 +1,5 @@
 # Contexto allowlist: apenas arquivos necessários ao build/runtime são enviados
-# ao daemon. Dados privados, caches, saídas e arquivos não rastreados ficam fora.
+# ao daemon. Dados privados, caches e saídas fora da allowlist não são enviados.
 *
 !pyproject.toml
 !uv.lock

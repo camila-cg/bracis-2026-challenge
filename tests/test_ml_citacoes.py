@@ -770,6 +770,28 @@ class DecodificacaoRestrita(unittest.TestCase):
         self.assertTrue(restrito[0].transformacoes_ocr)
         self.assertLess(restrito[0].score_bruto, bruto[0].score_bruto)
 
+    def test_dispositivo_de_inferencia_cai_para_cpu_sem_cuda(self):
+        from ml_citacoes.inferencia import _dispositivo_inferencia
+
+        class TorchFalso:
+            class cuda:
+                @staticmethod
+                def is_available():
+                    return False
+
+        class TorchComCuda:
+            class cuda:
+                @staticmethod
+                def is_available():
+                    return True
+
+        self.assertEqual(_dispositivo_inferencia(TorchFalso), "cpu")
+        self.assertEqual(_dispositivo_inferencia(TorchComCuda), "cuda")
+        self.assertEqual(_dispositivo_inferencia(TorchComCuda, "cpu"), "cpu")
+        self.assertEqual(_dispositivo_inferencia(TorchComCuda, "cuda"), "cuda")
+        with self.assertRaisesRegex(RuntimeError, "CUDA foi solicitado"):
+            _dispositivo_inferencia(TorchFalso, "cuda")
+
     def test_detectar_usa_politica_sem_mudar_offsets_ou_requerer_torch(self):
         from unittest.mock import Mock
         from ml_citacoes.inferencia import DetectorBIO

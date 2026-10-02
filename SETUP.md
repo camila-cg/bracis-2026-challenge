@@ -9,8 +9,8 @@ BERTimbau. Execute os comandos na raiz do repositório.
 A imagem definida pelo único `Dockerfile` incorpora no build o modelo público
 `giovannalavouras/bertimbau-large-citacoes-juridicas`, fixado pela revisão
 `44697e852ef12493d0c9f560ad7da1e513dcdb35`. O contêiner não acessa a internet
-durante a execução. O host precisa de GPU NVIDIA, driver compatível e NVIDIA
-Container Toolkit configurado.
+durante a execução. **GPU NVIDIA é o padrão** e requer driver compatível e
+NVIDIA Container Toolkit; CPU é uma alternativa explícita.
 
 ```powershell
 docker build -t bracis-2026 .
@@ -23,10 +23,13 @@ docker run --rm --gpus all --network none `
   /entrada/desafio1_bracis.db /entrada/txt /saida/submission.csv
 ```
 
+O comando acima é o fluxo padrão e exige CUDA. Para usar CPU, omita `--gpus all`
+e acrescente `-e BRACIS_DISPOSITIVO=cpu` ao comando `docker run`.
+
 O download do Hugging Face ocorre apenas em `docker build`; por isso o build
 precisa de internet, mas a imagem resultante é portável e executa offline.
 
-## Passo a passo: da pasta do repositório ao zip de submissão
+## Passo a passo: da pasta do repositório ao CSV final
 
 Comandos para PowerShell (Windows). As seções seguintes detalham cada etapa.
 
@@ -49,13 +52,7 @@ docker run --rm --gpus all --network none `
   bracis-2026 `
   /entrada/desafio1_bracis.db /entrada/txt /saida/submission.csv
 
-# 5. validar e empacotar (saida\submissao_<commit>\), fora do contêiner
-python src/empacotar_submissao.py
 ```
-
-O passo 5 roda fora do contêiner porque precisa do histórico do Git, que não
-entra na imagem. O host precisa de Git e Python 3.10+; no Windows, `py -3` pode
-substituir `python`. O script usa só a biblioteca padrão, sem pacote adicional.
 
 ### Execução local pelo script
 
@@ -66,9 +63,11 @@ Docker acima continua sendo o formato de entrega da competição.
 $modelo = ".hf-cache\bertimbau-large-citacoes-juridicas"
 uv sync --locked --no-default-groups --group ml
 uv run --locked --no-default-groups --group ml --no-sync hf download giovannalavouras/bertimbau-large-citacoes-juridicas --revision 44697e852ef12493d0c9f560ad7da1e513dcdb35 --local-dir $modelo
-uv run --locked --no-default-groups --group ml --no-sync python src/pipeline.py --modelo-citacoes $modelo
-python src/empacotar_submissao.py
+uv run --locked --no-default-groups --group ml --no-sync python src/pipeline.py --modelo-citacoes $modelo --dispositivo-modelo cuda
 ```
+
+Sem GPU, use `--dispositivo-modelo cpu`. O valor `auto` escolhe CUDA quando
+disponível e CPU nos demais casos.
 
 Acrescente `--avaliar` ao comando de `src/pipeline.py` para pontuar o fluxo
 híbrido localmente. O entrypoint Docker aceita somente os três argumentos
@@ -80,17 +79,6 @@ Para a baseline leve de regras, sem o detector neural, use somente:
 uv sync --locked --no-default-groups
 uv run --locked --no-default-groups --no-sync python src/pipeline.py
 ```
-
-### Depois do passo 5
-
-Em `saida\submissao_<commit>\` ficam:
-
-- `submission.csv` (ou `submission.zip`): envie no Kaggle em
-  *Submit Prediction → File Upload* e escreva o commit na descrição;
-- `bundle_<commit>.zip`: guarde para a verificação de reprodutibilidade.
-
-Se houver arquivos alterados e não commitados, faça commit antes do passo 5;
-senão o script recusa gerar o bundle (ver seção 5).
 
 ## 1. Dados necessários
 
@@ -115,13 +103,13 @@ o Python 3.12 (fixado em `.python-version`) e as versões travadas no `uv.lock`.
 MODELO_LOCAL=".hf-cache/bertimbau-large-citacoes-juridicas"
 uv sync --locked --no-default-groups --group ml
 uv run --locked --no-default-groups --group ml --no-sync hf download giovannalavouras/bertimbau-large-citacoes-juridicas --revision 44697e852ef12493d0c9f560ad7da1e513dcdb35 --local-dir "$MODELO_LOCAL"
-uv run --locked --no-default-groups --group ml --no-sync python src/pipeline.py --modelo-citacoes "$MODELO_LOCAL"
+uv run --locked --no-default-groups --group ml --no-sync python src/pipeline.py --modelo-citacoes "$MODELO_LOCAL" --dispositivo-modelo cuda
 ```
 
 O download do modelo exige internet apenas na primeira execução. Depois disso,
-o caminho em `.hf-cache` é local. O detector usa a GPU quando CUDA está
-disponível e recua para CPU caso contrário, com desempenho consideravelmente
-menor.
+o caminho em `.hf-cache` é local. O comando acima exige GPU. Para executar a
+mesma composição híbrida em CPU, use `--dispositivo-modelo cpu`; `auto` escolhe
+CUDA quando disponível e recua para CPU.
 
 ### Baseline de regras
 
@@ -162,10 +150,9 @@ python3 -m venv .venv
 
 ## 3. Execução oficial com Docker
 
-Requer Docker, GPU NVIDIA e o NVIDIA Container Toolkit (no Windows, Docker
-Desktop com backend WSL2). A imagem usa as versões do `uv.lock`. Os dados não
-são copiados para a imagem: as pastas de entrada e saída são montadas no
-contêiner.
+Requer Docker; no Windows, use o Docker Desktop com backend WSL2. O padrão usa
+GPU NVIDIA, driver compatível e NVIDIA Container Toolkit. A imagem usa as versões do `uv.lock`. Os dados não são
+copiados para a imagem: as pastas de entrada e saída são montadas no contêiner.
 
 ```bash
 docker build -t bracis-2026 .
@@ -187,9 +174,26 @@ docker run --rm --gpus all --network none `
   /entrada/desafio1_bracis.db /entrada/txt /saida/submission.csv
 ```
 
+Esses comandos executam no modo padrão, com GPU. Em hosts sem GPU, omita
+`--gpus all` e acrescente `-e BRACIS_DISPOSITIVO=cpu`; apenas remover a flag de
+GPU não basta, pois o wrapper exige CUDA por padrão.
+
+Exemplo em CPU (Bash):
+
+```bash
+docker run --rm --network none -e BRACIS_DISPOSITIVO=cpu \
+  -v "$PWD/data:/entrada:ro" -v "$PWD/saida:/saida" \
+  bracis-2026 \
+  /entrada/desafio1_bracis.db /entrada/txt /saida/submission.csv
+```
+
 A entrada recebe exatamente três argumentos posicionais: banco SQLite, pasta de
 TXT e arquivo CSV final. Para persistir depois de `--rm`, o CSV precisa estar
 dentro do volume de saída montado, como `/saida/submission.csv` no exemplo.
+O wrapper opera em modo estrito: se o detector, um documento ou uma citação
+falhar, o processo termina com código diferente de zero e não grava uma
+submissão parcial. O diagnóstico fica no volume de saída, em
+`/saida/.bracis-work/logs/`.
 Só é preciso refazer o `docker build` quando o código ou as dependências mudarem.
 O modelo usado no build é
 `giovannalavouras/bertimbau-large-citacoes-juridicas`, na revisão imutável
@@ -197,18 +201,38 @@ O modelo usado no build é
 o contêiner executa com acesso do Hugging Face desativado e pode ser iniciado
 com `--network none` depois de a imagem estar pronta.
 
+### Se o Docker Desktop não iniciar no Windows
+
+O erro `dockerDesktopLinuxEngine: The system cannot find the file specified`
+indica que o cliente está instalado, mas o engine Linux não está disponível.
+Executar em CPU elimina a exigência de GPU, porém **não** elimina a necessidade
+do backend WSL2/virtualização usado pelo Docker Desktop. Confirme:
+
+```powershell
+docker info
+wsl --status
+Get-ComputerInfo -Property HyperVisorPresent,HyperVRequirementVirtualizationFirmwareEnabled
+```
+
+Se o WSL informar que a virtualização não está habilitada, ative a virtualização
+de hardware no firmware/BIOS, habilite os componentes WSL2 e Plataforma de
+Máquina Virtual do Windows e reinicie o host. Só prossiga quando `docker info`
+mostrar a seção `Server`; trocar `--gpus all` por CPU não corrige um engine
+inativo.
+
 ## 4. Saídas e opções
 
 Na execução local, o pipeline grava:
 
 - `saida/json/<documento_id>.json`: um JSON por documento (contrato do desafio);
-- `saida/submission.csv`: o arquivo de submissão do Kaggle;
+- `saida/submission.csv`: o CSV final produzido pelo pipeline;
 - `outputs/extracao_<data>.csv`: um CSV de depuração da extração por execução, com os
   candidatos de cada documento. Não faz parte da submissão e fica fora do git.
 
-No contêiner oficial, o terceiro argumento é o único artefato persistido pelo
-comando documentado. Os JSONs, logs e diagnósticos ficam no filesystem temporário
-do contêiner; execute o pipeline localmente se precisar inspecioná-los.
+No contêiner oficial, o terceiro argumento é o CSV final. O mesmo volume recebe
+`.bracis-work/json/`, com os JSONs por documento, e
+`.bracis-work/logs/`, criado quando ocorre uma falha. O CSV de depuração da
+extração continua temporário e não faz parte da submissão.
 
 Opções de `src/pipeline.py`:
 
@@ -220,25 +244,22 @@ Opções de `src/pipeline.py`:
 | `--saida <pasta>` | pasta de saída (padrão `saida`) |
 | `--arquivo-saida <arquivo>` | caminho exato do CSV final; usado pelo wrapper Docker |
 | `--logs <pasta>` | pasta dos registros JSONL de erros recuperáveis |
+| `--falhar-em-erros` | não gera CSV se houver qualquer erro recuperável; usado pelo Docker oficial |
 | `--goldenset <arquivo>` | gabarito usado por `--avaliar` |
 | `--modelo-citacoes <pasta>` | ativa um artefato local do detector BIO |
+| `--dispositivo-modelo <auto|cuda|cpu>` | seleciona o dispositivo; local usa `auto` por padrão e Docker usa `cuda` |
 
-## 5. Submeter no Kaggle
+## 5. Gerar um ZIP opcional
 
-Com as mudanças commitadas, gere as saídas e depois rode:
+O CSV já é a saída final. Se outro processo exigir um ZIP, rode:
 
 ```bash
 python src/empacotar_submissao.py
 ```
 
-O script valida o `saida/submission.csv` e cria `saida/submissao_<commit>/` com:
-
-- `submission.csv` e `submission.zip`: envie um dos dois em *Submit Prediction → File Upload*
-  e anote o commit na descrição da submissão;
-- `bundle_<commit>.zip`: o código desse commit e um `comando.txt`, para a verificação de reprodutibilidade.
-
-Se houver mudanças não commitadas, o script recusa gerar o bundle; use
-`--permitir-sujo` apenas para testes.
+O utilitário cria apenas `saida/submission.zip` a partir do CSV. Ele é opcional,
+não faz parte da execução oficial e não
+empacota código, histórico Git nem comandos de entrega.
 
 ## 6. Testes e gates
 
@@ -265,22 +286,33 @@ de reescrevê-lo em silêncio. Só rode `uv lock` ao mudar dependências, e comm
 Os testes e gates usam `data/desafio1_bracis.db` (e `data/txt` e
 `data/goldenset_offsets.csv` para `--avaliar`), que não vão no git: copie-os como na
 seção 1. Sem a base, os testes que dependem dela são **pulados**, não falham; a
-quantidade exata varia à medida que a suíte evolui. O dataset sintético do
-holdout, `datasets/dataset_citacoes_br_sintetico_2026_seed26092217.zip`, é
+quantidade exata varia à medida que a suíte evolui. O dataset de regressão
+sintética, `datasets/dataset_citacoes_br_sintetico_2026_seed26092217.zip`, é
 versionado.
 
 ### Gates de generalização
 
-O dev está saturado (macro-F1 1,0) e só acusa regressão. Estes gates medem fora dele;
-os pisos ficam nas constantes do topo de cada teste.
+O dev está saturado (macro-F1 1,0) e só acusa regressão. Os gates abaixo medem
+robustez das regras e cobertura da base; os pisos ficam nas constantes do topo
+de cada teste. O ZIP sintético não é um holdout independente do detector neural:
+seus 26 documentos constam no manifesto de treino do artefato final. Portanto,
+ele não pode sustentar afirmações de generalização do modelo ou do híbrido.
 
 | Gate | Teste | Script para ver os números |
 |---|---|---|
 | Registro de regressão: casos que já geraram erro e controles | `tests/test_casos_regressao.py` (lê `data/validation/casos_regressao.csv`) | — |
-| Holdout sintético (ZIP saneado), pontuado pela métrica oficial | `tests/test_holdout_zip.py` | `uv run --locked --no-default-groups python src/validacao/holdout_zip.py --detalhes` |
+| Regressão sintética (ZIP saneado; sobreposta ao treino neural), pontuada pela métrica oficial | `tests/test_holdout_zip.py` | `uv run --locked --no-default-groups python src/validacao/holdout_zip.py --detalhes` |
 | Base canônica inteira, por tribunal, com falsos positivos | `tests/test_base_inteira.py` | `uv run --locked --no-default-groups python src/validacao/teste_base_inteira.py` |
 | Estresse: ruído e troca de dígito nas citações do dev (4 execuções, cerca de 35 s) | `tests/test_estresse.py` | `uv run --locked --no-default-groups python src/validacao/estresse.py --seeds 3` (cerca de 1 min) |
 | Dev (26 documentos) | — | `uv run --locked --no-default-groups python src/pipeline.py --avaliar` |
+
+Para o detector e a fusão, use `manifesto_datasets.py` para registrar treino e
+avaliação e depois `gate_hibrido.py`. Esse gate recusa sobreposição por ID ou
+SHA-256 antes de carregar o modelo, executa ablações pareadas de regras/modelo/
+fusão e usa a métrica oficial completa. O passo a passo e o comando com os
+limiares oficiais `0.99/0.99` estão em
+[`src/validacao/README.md`](src/validacao/README.md). Ele só pode ser concluído
+quando houver um holdout independente; não reutilize o ZIP sintético atual.
 
 Ao melhorar um número, suba o piso na mesma mudança. No registro de regressão, um
 caso `aberto` que passa a funcionar faz o teste falhar de propósito: mude o

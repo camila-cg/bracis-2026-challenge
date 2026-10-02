@@ -63,6 +63,7 @@ jobs:
 
           docker run --rm --network none \
             -e CUDA_VISIBLE_DEVICES= \
+            -e BRACIS_DISPOSITIVO=cpu \
             -v "$fixture:/dados" \
             bracis-2026:smoke \
             /dados/desafio.db /dados/txt /dados/out/submission.csv
