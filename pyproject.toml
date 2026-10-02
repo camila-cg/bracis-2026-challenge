@@ -3,6 +3,7 @@ name = "bracis-2026-challenge"
 version = "0.1.0"
 description = "Verificação de citações jurídicas em pareceres de IA (Jusbrasil × BRACIS 2026)"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.10"
 dependencies = [
     # usados pela métrica oficial (data/kaggle_metric.py)

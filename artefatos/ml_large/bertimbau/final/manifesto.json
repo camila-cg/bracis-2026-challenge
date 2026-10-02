@@ -1,4 +1,9 @@
 {
+  "license": "MIT",
+  "license_file": "adaptador/LICENSE",
+  "third_party_notices": "adaptador/NOTICE",
+  "model_card": "adaptador/README.md",
+  "base_model_license": "MIT",
   "checkpoint": "neuralmind/bert-large-portuguese-cased",
   "revisao_solicitada": "main",
   "revisao_resolvida": "aa302f6ea73b759f7df9cad58bd272127b67ec28",

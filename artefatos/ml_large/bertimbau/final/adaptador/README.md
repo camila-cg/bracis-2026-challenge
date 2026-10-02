@@ -1,206 +1,159 @@
 ---
+model_name: BERTimbau Large LoRA para detecção de citações jurídicas
 base_model: neuralmind/bert-large-portuguese-cased
+base_model_revision: aa302f6ea73b759f7df9cad58bd272127b67ec28
 library_name: peft
+pipeline_tag: token-classification
+language:
+- pt
+license: mit
 tags:
 - base_model:adapter:neuralmind/bert-large-portuguese-cased
 - lora
 - transformers
+- token-classification
+- legal
 ---
 
-# Model Card for Model ID
+# BERTimbau Large LoRA para detecção de citações jurídicas
+
+Adaptador LoRA experimental para localizar, em textos jurídicos em português
+brasileiro, menções a legislação (`LEI`) e jurisprudência (`JUR`). O modelo
+produz rótulos BIO e foi criado como complemento opcional do pipeline do
+desafio Jusbrasil × BRACIS 2026.
+
+Este diretório contém o adaptador e a cabeça de classificação, não os pesos do
+modelo-base. Para inferência, também é necessário obter o BERTimbau Large na
+revisão exata informada abaixo.
+
+## Detalhes do modelo
+
+- **Desenvolvido e disponibilizado por:** contribuidores do repositório
+  `bracis-2026-challenge`.
+- **Tipo:** classificador de tokens BERT Large com adaptadores LoRA e cabeça
+  linear para cinco rótulos BIO.
+- **Idioma e domínio:** português brasileiro; documentos jurídicos com citações
+  legislativas e jurisprudenciais.
+- **Rótulos:** `O`, `B-LEI`, `I-LEI`, `B-JUR` e `I-JUR`.
+- **Modelo-base:**
+  [`neuralmind/bert-large-portuguese-cased`](https://huggingface.co/neuralmind/bert-large-portuguese-cased),
+  revisão `aa302f6ea73b759f7df9cad58bd272127b67ec28`.
+- **Licença do adaptador:** MIT; consulte [LICENSE](LICENSE).
+- **Licença do modelo-base:** MIT; consulte [NOTICE](NOTICE) para atribuição e
+  aviso de terceiros.
+- **Código-fonte:**
+  [`camila-cg/bracis-2026-challenge`](https://github.com/camila-cg/bracis-2026-challenge).
+
+## Usos
+
+### Uso pretendido
+
+O adaptador identifica spans candidatos de citações jurídicas para posterior
+normalização, consulta à base canônica e classificação pelo pipeline do
+repositório. Ele pode ser usado para experimentação e reprodução do desafio.
+
+O decoder Viterbi do repositório impõe transições BIO válidas. As pontuações são
+derivadas do softmax local dos tokens e não representam probabilidades
+calibradas de correção jurídica.
+
+## Como usar
+
+Instale as dependências de ML indicadas em `requirements-ml.txt` e garanta que
+os pesos do modelo-base, na revisão fixada, estejam disponíveis no cache local.
+Na raiz do repositório, execute:
+
+```bash
+PYTHONPATH=src python src/pipeline.py \
+  --modelo-citacoes artefatos/ml_large/bertimbau/final \
+  --limiar-lei 0.99 --limiar-jur 0.99
+```
+
+O caminho fornecido ao pipeline é a pasta `final`, que reúne este adaptador, o
+tokenizer e o `manifesto.json`. Por padrão, o carregamento não baixa pesos da
+internet implicitamente.
+
+## Dados de treinamento
+
+O snapshot foi retreinado com `fold=todos` em 52 documentos: 26 documentos do
+conjunto original e 26 documentos sintéticos, conforme os IDs registrados em
+`../manifesto.json`. O hash SHA-256 do arquivo de treinamento preparado é:
+
+```text
+793a3b6bcc6fcb78eff4d8aa95fd2843895461424c94525cbebe0e0798ff8952
+```
+
+Os arquivos brutos de treinamento não são redistribuídos neste diretório. Como
+modelos podem memorizar trechos, a publicação dos pesos não elimina a necessidade
+de revisar a origem e as permissões dos dados. 
+
+## Procedimento de treinamento
+
+- arquitetura-base BERT Large (24 camadas; aproximadamente 335 milhões de
+  parâmetros);
+- LoRA com rank 7, alpha 14 e dropout 0,075 nos módulos `query` e `value`;
+- cabeça de classificação de tokens treinável;
+- 20 épocas, taxa de aprendizado `1e-4` e weight decay `0,01`;
+- batch 1, acumulação de gradiente 4 e batch efetivo 4;
+- janelas de 512 tokens com stride 96;
+- entropia cruzada ponderada e subamostragem de tokens `O`;
+- aumento de ruído OCR habilitado para os documentos originais;
+- seed `260926`, precisão FP32 e gradient checkpointing habilitado;
+- duração registrada de 147,17 segundos; pico de VRAM alocada de 1.436,40 MiB
+  e reservada de 1.508 MiB.
+
+
+
+## Avaliação
+
+Este snapshot final foi treinado com todos os documentos disponíveis e não tem
+conjunto de validação nem métricas independentes registradas em seu manifesto.
+Por isso, esta página não declara precisão, recall ou F1 para este artefato.
+
+Resultados de experimentos anteriores, descritos na documentação do
+repositório, não devem ser interpretados como estimativa de generalização deste
+snapshot. Antes de uso real, avalie-o em documentos independentes, com análise
+por tipo de citação, qualidade de OCR, tribunal, período e fonte documental.
+
+## Vieses, riscos e limitações
+
+- O conjunto de treinamento é pequeno e específico do desafio, o que aumenta o
+  risco de memorização e baixa generalização.
+- Não houve validação independente deste snapshot após o retreino em todos os
+  documentos.
+- Citações incomuns, abreviações não vistas, OCR severo e textos fora do domínio
+  podem causar falsos positivos ou falsos negativos.
+- O modelo detecta forma textual; ele não verifica vigência, autenticidade,
+  aplicabilidade ou correção material da referência.
+- O tokenizer e o modelo-base refletem vieses do corpus de pré-treinamento do
+  BERTimbau, que não foram reavaliados neste projeto.
 
-<!-- Provide a quick summary of what the model is/does. -->
 
 
+## Reprodutibilidade
 
-## Model Details
+Os parâmetros, IDs dos documentos, revisão do modelo-base, hash do dataset,
+balanceamento e consumo de recursos estão em `../manifesto.json`. A configuração
+de treino correspondente está em `config/ml_bertimbau_large.json` no
+repositório.
 
-### Model Description
+## Citação do modelo-base
 
-<!-- Provide a longer summary of what this model is. -->
+```bibtex
+@inproceedings{souza2020bertimbau,
+  author    = {Souza, Fábio and Nogueira, Rodrigo and Lotufo, Roberto},
+  title     = {BERTimbau: Pretrained BERT Models for Brazilian Portuguese},
+  booktitle = {Intelligent Systems},
+  year      = {2020},
+  publisher = {Springer International Publishing},
+  pages     = {403--417}
+}
+```
 
+## Contato
 
+Abra uma issue no
+[`camila-cg/bracis-2026-challenge`](https://github.com/camila-cg/bracis-2026-challenge/issues).
 
-- **Developed by:** [More Information Needed]
-- **Funded by [optional]:** [More Information Needed]
-- **Shared by [optional]:** [More Information Needed]
-- **Model type:** [More Information Needed]
-- **Language(s) (NLP):** [More Information Needed]
-- **License:** [More Information Needed]
-- **Finetuned from model [optional]:** [More Information Needed]
-
-### Model Sources [optional]
-
-<!-- Provide the basic links for the model. -->
-
-- **Repository:** [More Information Needed]
-- **Paper [optional]:** [More Information Needed]
-- **Demo [optional]:** [More Information Needed]
-
-## Uses
-
-<!-- Address questions around how the model is intended to be used, including the foreseeable users of the model and those affected by the model. -->
-
-### Direct Use
-
-<!-- This section is for the model use without fine-tuning or plugging into a larger ecosystem/app. -->
-
-[More Information Needed]
-
-### Downstream Use [optional]
-
-<!-- This section is for the model use when fine-tuned for a task, or when plugged into a larger ecosystem/app -->
-
-[More Information Needed]
-
-### Out-of-Scope Use
-
-<!-- This section addresses misuse, malicious use, and uses that the model will not work well for. -->
-
-[More Information Needed]
-
-## Bias, Risks, and Limitations
-
-<!-- This section is meant to convey both technical and sociotechnical limitations. -->
-
-[More Information Needed]
-
-### Recommendations
-
-<!-- This section is meant to convey recommendations with respect to the bias, risk, and technical limitations. -->
-
-Users (both direct and downstream) should be made aware of the risks, biases and limitations of the model. More information needed for further recommendations.
-
-## How to Get Started with the Model
-
-Use the code below to get started with the model.
-
-[More Information Needed]
-
-## Training Details
-
-### Training Data
-
-<!-- This should link to a Dataset Card, perhaps with a short stub of information on what the training data is all about as well as documentation related to data pre-processing or additional filtering. -->
-
-[More Information Needed]
-
-### Training Procedure
-
-<!-- This relates heavily to the Technical Specifications. Content here should link to that section when it is relevant to the training procedure. -->
-
-#### Preprocessing [optional]
-
-[More Information Needed]
-
-
-#### Training Hyperparameters
-
-- **Training regime:** [More Information Needed] <!--fp32, fp16 mixed precision, bf16 mixed precision, bf16 non-mixed precision, fp16 non-mixed precision, fp8 mixed precision -->
-
-#### Speeds, Sizes, Times [optional]
-
-<!-- This section provides information about throughput, start/end time, checkpoint size if relevant, etc. -->
-
-[More Information Needed]
-
-## Evaluation
-
-<!-- This section describes the evaluation protocols and provides the results. -->
-
-### Testing Data, Factors & Metrics
-
-#### Testing Data
-
-<!-- This should link to a Dataset Card if possible. -->
-
-[More Information Needed]
-
-#### Factors
-
-<!-- These are the things the evaluation is disaggregating by, e.g., subpopulations or domains. -->
-
-[More Information Needed]
-
-#### Metrics
-
-<!-- These are the evaluation metrics being used, ideally with a description of why. -->
-
-[More Information Needed]
-
-### Results
-
-[More Information Needed]
-
-#### Summary
-
-
-
-## Model Examination [optional]
-
-<!-- Relevant interpretability work for the model goes here -->
-
-[More Information Needed]
-
-## Environmental Impact
-
-<!-- Total emissions (in grams of CO2eq) and additional considerations, such as electricity usage, go here. Edit the suggested text below accordingly -->
-
-Carbon emissions can be estimated using the [Machine Learning Impact calculator](https://mlco2.github.io/impact#compute) presented in [Lacoste et al. (2019)](https://arxiv.org/abs/1910.09700).
-
-- **Hardware Type:** [More Information Needed]
-- **Hours used:** [More Information Needed]
-- **Cloud Provider:** [More Information Needed]
-- **Compute Region:** [More Information Needed]
-- **Carbon Emitted:** [More Information Needed]
-
-## Technical Specifications [optional]
-
-### Model Architecture and Objective
-
-[More Information Needed]
-
-### Compute Infrastructure
-
-[More Information Needed]
-
-#### Hardware
-
-[More Information Needed]
-
-#### Software
-
-[More Information Needed]
-
-## Citation [optional]
-
-<!-- If there is a paper or blog post introducing the model, the APA and Bibtex information for that should go in this section. -->
-
-**BibTeX:**
-
-[More Information Needed]
-
-**APA:**
-
-[More Information Needed]
-
-## Glossary [optional]
-
-<!-- If relevant, include terms and calculations in this section that can help readers understand the model or model card. -->
-
-[More Information Needed]
-
-## More Information [optional]
-
-[More Information Needed]
-
-## Model Card Authors [optional]
-
-[More Information Needed]
-
-## Model Card Contact
-
-[More Information Needed]
-### Framework versions
+### Versão do framework
 
 - PEFT 0.21.0
