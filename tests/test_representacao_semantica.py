@@ -1,8 +1,10 @@
 """Contrato semântico e decisões que não dependem do gabarito."""
 
+import sqlite3
 import unittest
 from unittest.mock import patch
 
+import indice_utils as ind
 from modelos import CitacaoNormalizada, ResultadoResolucao
 from steps.buscar_na_base import Resolvedor
 from steps.normalizar_citacao import normalizar_citacao
@@ -38,7 +40,11 @@ class DecisaoSemantica(unittest.TestCase):
     def setUp(self):
         self.resolvedor = Resolvedor.__new__(Resolvedor)
         self.resolvedor.con = None
-        self.resolvedor.normativos = {"lei|Código de Processo Civil|373": [{"id": 42}]}
+        self.resolvedor.normativos = {
+            "lei|Código de Processo Civil|373": [{"id": 42}],
+            "tema|STF|339": [{"id": 50}],
+            "tema|STJ|1076": [{"id": 51}],
+        }
         self.resolvedor.acordaos_por_numero = {
             "1741784": [
                 {"id": 1, "classe": "REsp", "uf": "PR"},
@@ -88,12 +94,46 @@ class DecisaoSemantica(unittest.TestCase):
         resultado = self.resolvedor.resolver_citacao(citacao("art. 373 do CPC", "lei"))
         self.assertEqual((resultado.classe, resultado.candidatos), ("incompleta", (42, 43)))
 
-    def test_cobertura_explicita_para_familias_fora_do_catalogo(self):
-        lei = self.resolvedor.resolver_citacao(citacao("art. 172 da Lei nº 9.504/1997", "lei"))
+    def test_tema_indexado_pode_ser_real(self):
+        tema_stf = self.resolvedor.resolver_citacao(citacao("Tema 339/STF", "tema"))
+        tema_stj = self.resolvedor.resolver_citacao(citacao("Tema 1.076 do STJ", "tema"))
+        self.assertEqual((tema_stf.classe, tema_stf.id_canonico), ("real", 50))
+        self.assertEqual((tema_stj.classe, tema_stj.id_canonico), ("real", 51))
+
+    def test_tema_sem_tribunal_resolve_apenas_quando_numero_e_unico(self):
+        unico = self.resolvedor.resolver_citacao(citacao("Tema 339", "tema"))
+        self.assertEqual((unico.classe, unico.id_canonico), ("real", 50))
+
+        self.resolvedor.normativos["tema|STJ|339"] = [{"id": 52}]
+        ambiguo = self.resolvedor.resolver_citacao(citacao("Tema 339", "tema"))
+        self.assertEqual((ambiguo.classe, ambiguo.candidatos), ("incompleta", (50, 52)))
+
+    def test_tema_ausente_da_base_continua_inventado(self):
         tema = self.resolvedor.resolver_citacao(citacao("Tema 1234", "tema"))
+        self.assertEqual((tema.classe, tema.cobertura), ("inventada", "indexada"))
+
+    def test_indice_canonico_inclui_temas(self):
+        con = sqlite3.connect(":memory:")
+        con.execute(
+            "CREATE TABLE documentos (documento_id TEXT, id INTEGER, "
+            "natureza TEXT, tribunal TEXT, texto TEXT)"
+        )
+        con.executemany(
+            "INSERT INTO documentos VALUES (?, ?, ?, ?, ?)",
+            [
+                ("tema-stf-339", 70, "tema", "STF", "Tema 339 - fundamentação"),
+                ("tema-stj-1076", 71, "tema", None, "Tema repetitivo 1.076 do STJ"),
+            ],
+        )
+        indice, sem_resolucao = ind.construir_indice_normativos(con)
+        self.assertEqual(sem_resolucao, [])
+        self.assertEqual(indice["tema|STF|339"][0]["id"], 70)
+        self.assertEqual(indice["tema|STJ|1076"][0]["id"], 71)
+
+    def test_cobertura_explicita_para_lei_fora_do_catalogo(self):
+        lei = self.resolvedor.resolver_citacao(citacao("art. 172 da Lei nº 9.504/1997", "lei"))
         self.assertEqual((lei.classe, lei.cobertura, lei.motivo),
                          ("inventada", "fora_base", "lei_numerada_sem_mapeamento"))
-        self.assertEqual((tema.classe, tema.cobertura), ("inventada", "fora_base"))
 
     def test_resultado_real_exige_id(self):
         with self.assertRaises(ValueError):

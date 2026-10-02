@@ -124,10 +124,23 @@ class Resolvedor:
 
         if citacao.familia == ROTA_TEMA:
             if citacao.numero and not citacao.numero.strip("0"):
-                return ResultadoResolucao("inventada", None, "tema", cobertura="fora_base", motivo="numero_zero")
+                return ResultadoResolucao("inventada", None, "tema_inventada", cobertura="fora_base", motivo="numero_zero")
             if not citacao.numero or not citacao.identificador_suficiente:
-                return ResultadoResolucao("incompleta", None, "tema", cobertura="nao_consultada", motivo="numero_ausente")
-            return ResultadoResolucao("inventada", None, "tema", cobertura="fora_base", motivo="tema_nao_indexado")
+                return ResultadoResolucao("incompleta", None, "tema_sem_numero", cobertura="nao_consultada", motivo="numero_ausente")
+
+            if citacao.tribunal:
+                alvos = self.normativos.get(
+                    f"tema|{citacao.tribunal}|{citacao.numero}", []
+                )
+            else:
+                sufixo = f"|{citacao.numero}"
+                alvos = [
+                    registro
+                    for chave, registros in self.normativos.items()
+                    if chave.startswith("tema|") and chave.endswith(sufixo)
+                    for registro in registros
+                ]
+            return self._resultado_normativo(alvos, "tema")
 
         if citacao.identificador_adulterado:
             return ResultadoResolucao(

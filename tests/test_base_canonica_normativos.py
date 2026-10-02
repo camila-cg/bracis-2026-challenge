@@ -1,4 +1,4 @@
-"""Trava as premissas da base usadas para indexar dispositivos e súmulas."""
+"""Trava as premissas da base usadas para indexar dispositivos, súmulas e temas."""
 
 import re
 import sqlite3
@@ -22,7 +22,7 @@ class BaseCanonicaNormativos(unittest.TestCase):
         cls.con = sqlite3.connect(banco.as_uri() + "?immutable=1", uri=True)
         cls.registros = cls.con.execute(
             "SELECT documento_id, id, natureza, texto FROM documentos "
-            "WHERE natureza IN ('dispositivo', 'sumula')"
+            "WHERE natureza IN ('dispositivo', 'sumula', 'tema')"
         ).fetchall()
 
     @classmethod
@@ -33,7 +33,7 @@ class BaseCanonicaNormativos(unittest.TestCase):
     def test_quantidades_de_normativos_na_base_nao_mudam_sem_revisao(self):
         por_natureza = {
             natureza: sum(registro[2] == natureza for registro in self.registros)
-            for natureza in ("dispositivo", "sumula")
+            for natureza in ("dispositivo", "sumula", "tema")
         }
         self.assertEqual(por_natureza["dispositivo"], QUANTIDADE_DISPOSITIVOS)
         self.assertEqual(por_natureza["sumula"], QUANTIDADE_SUMULAS)
@@ -65,9 +65,15 @@ class BaseCanonicaNormativos(unittest.TestCase):
 
     def test_indice_resolve_todos_os_normativos_sem_colisao(self):
         indice, sem_resolucao = ind.construir_indice_normativos(self.con)
+        quantidade_temas = sum(
+            registro[2] == "tema" for registro in self.registros
+        )
 
         self.assertEqual(sem_resolucao, [])
-        self.assertEqual(len(indice), QUANTIDADE_DISPOSITIVOS + QUANTIDADE_SUMULAS)
+        self.assertEqual(
+            len(indice),
+            QUANTIDADE_DISPOSITIVOS + QUANTIDADE_SUMULAS + quantidade_temas,
+        )
         self.assertEqual(sum(map(len, indice.values())), len(self.registros))
         self.assertTrue(all(len(registros) == 1 for registros in indice.values()))
         self.assertEqual(
@@ -77,6 +83,10 @@ class BaseCanonicaNormativos(unittest.TestCase):
         self.assertEqual(
             sum(chave.startswith("sumula|") for chave in indice),
             QUANTIDADE_SUMULAS,
+        )
+        self.assertEqual(
+            sum(chave.startswith("tema|") for chave in indice),
+            quantidade_temas,
         )
 
 
