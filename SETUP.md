@@ -132,8 +132,9 @@ uv run --locked --no-default-groups --no-sync python src/pipeline.py
 
 Nesse caso, `--no-default-groups` instala só o necessário para as regras
 (`pandas`). A baseline não carrega o BERTimbau e não equivale à entrega oficial.
-Para desenvolver também com `pytest` e notebooks, use `uv sync` sem a flag; os
-grupos `dev` e `notebooks` estão em `default-groups` no `pyproject.toml`.
+Para desenvolver também com `pytest` e notebooks, use `uv sync --locked` sem
+`--no-default-groups`; os grupos `dev` e `notebooks` estão em `default-groups`
+no `pyproject.toml`.
 
 ### Com pip — baseline de regras
 

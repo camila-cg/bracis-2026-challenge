@@ -278,7 +278,11 @@ def main() -> None:
     )
     parser.add_argument("--avaliar", action="store_true", help="pontua contra data/goldenset_offsets.csv")
     parser.add_argument("--goldenset", type=Path, default=DADOS / "goldenset_offsets.csv")
-    parser.add_argument("--modelo-citacoes", type=Path, help="artefato LoRA local; omitido mantém regras idênticas")
+    parser.add_argument(
+        "--modelo-citacoes",
+        type=Path,
+        help="artefato local LoRA ou modelo mesclado; omitido mantém somente as regras",
+    )
     parser.add_argument("--decodificador-bio", choices=["viterbi", "argmax"], default="viterbi",
                         help="Viterbi padrão; argmax disponível para comparação histórica")
     parser.add_argument("--lote-janelas-bio", type=int, default=8)
