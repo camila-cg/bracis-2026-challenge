@@ -296,7 +296,7 @@ def construir_indice_acordaos(con: sqlite3.Connection) -> tuple[dict, list[dict]
 
 
 # --------------------------------------------------------------------------- #
-# Índice dos registros normativos (súmulas + dispositivos de lei)
+# Índice dos registros normativos (súmulas, temas + dispositivos de lei)
 # --------------------------------------------------------------------------- #
 
 # Estatuto de cada dispositivo mapeado à mão (o número de artigo sozinho não
@@ -311,6 +311,17 @@ ARTIGO_INICIAL = re.compile(r"\s*Art(?:igo)?\.?\s*(\d[\d.]*)", re.I)
 # bibliográfica: "(SÚMULA 83, CORTE ESPECIAL, julgado em ...)".
 SUMULA_NO_TEXTO = re.compile(r"S[ÚU]MULA\s+(\d+)", re.UNICODE)
 
+# A base de desenvolvimento original não continha temas, mas bases canônicas
+# posteriores podem registrá-los com ``natureza='tema'``. O número costuma
+# aparecer no título como "Tema 339", "Tema repetitivo 1.076" ou "Tema de
+# repercussão geral nº 123".
+TEMA_NO_TEXTO = re.compile(
+    r"\bTEMA(?:\s+REPETITIVO|\s+DE\s+REPERCUSS[ÃA]O\s+GERAL)?\s*"
+    r"(?:N(?:\s*[.º°]|[UÚ]MERO)?\s*)?(\d+(?:\.\d+)*)",
+    re.I | re.UNICODE,
+)
+TRIBUNAL_NO_TEXTO = re.compile(r"\b(STF|STJ|TST|TSE|STM)\b", re.I)
+
 # STF e TST não citam o próprio número em lugar nenhum do texto — identifiquei
 # comparando o enunciado com o texto oficial das duas súmulas.
 SUMULA_SEM_NUMERO_NO_TEXTO = {
@@ -320,7 +331,10 @@ SUMULA_SEM_NUMERO_NO_TEXTO = {
 
 
 def construir_indice_normativos(con: sqlite3.Connection) -> tuple[dict, list[dict]]:
-    """Índice "lei|<estatuto>|<artigo>" e "sumula|<tribunal>|<número>" -> registros.
+    """Índice de leis, súmulas e temas por sua identidade jurídica.
+
+    As chaves são ``lei|<estatuto>|<artigo>``,
+    ``sumula|<tribunal>|<número>`` e ``tema|<tribunal>|<número>``.
 
     Aqui a chave é semântica, não posicional: não existe cabeçalho nesses
     registros, o alvo é o próprio enunciado. Preserva colisões para que uma
@@ -329,9 +343,10 @@ def construir_indice_normativos(con: sqlite3.Connection) -> tuple[dict, list[dic
     indice: dict[str, list[dict]] = {}
     sem_resolucao = []
     cur = con.execute(
-        "SELECT documento_id, id, natureza, texto FROM documentos WHERE natureza IN ('sumula','dispositivo')"
+        "SELECT documento_id, id, natureza, tribunal, texto FROM documentos "
+        "WHERE natureza IN ('sumula','dispositivo','tema')"
     )
-    for documento_id, id_canonico, natureza, texto in cur:
+    for documento_id, id_canonico, natureza, tribunal, texto in cur:
         if natureza == "dispositivo":
             m = ARTIGO_INICIAL.match(texto)
             estatuto = ESTATUTO_POR_ID.get(id_canonico)
@@ -340,19 +355,25 @@ def construir_indice_normativos(con: sqlite3.Connection) -> tuple[dict, list[dic
                 continue
             artigo = m.group(1).replace(".", "")
             chave = f"lei|{estatuto}|{artigo}"
-        else:  # sumula
+        elif natureza == "sumula":
             m = SUMULA_NO_TEXTO.search(texto)
             if m:
                 numero = m.group(1)
-                tribunal = con.execute(
-                    "SELECT tribunal FROM documentos WHERE id=?", (id_canonico,)
-                ).fetchone()[0]
             elif id_canonico in SUMULA_SEM_NUMERO_NO_TEXTO:
                 tribunal, numero = SUMULA_SEM_NUMERO_NO_TEXTO[id_canonico]
             else:
                 sem_resolucao.append({"documento_id": documento_id, "id": id_canonico, "natureza": natureza})
                 continue
             chave = f"sumula|{tribunal}|{numero}"
+        else:  # tema
+            m = TEMA_NO_TEXTO.search(texto)
+            tribunal_texto = TRIBUNAL_NO_TEXTO.search(texto)
+            tribunal = tribunal or (tribunal_texto.group(1).upper() if tribunal_texto else None)
+            if not m or not tribunal:
+                sem_resolucao.append({"documento_id": documento_id, "id": id_canonico, "natureza": natureza})
+                continue
+            numero = normalizar_numero(m.group(1))
+            chave = f"tema|{str(tribunal).upper()}|{numero}"
         indice.setdefault(chave, []).append({"id": id_canonico, "documento_id": documento_id})
     return indice, sem_resolucao
 

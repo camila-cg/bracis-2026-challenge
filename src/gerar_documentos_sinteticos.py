@@ -127,6 +127,9 @@ def carregar_catalogo(base: Path) -> tuple[list[Referencia], set[str], set[int]]
             if partes[0] == "sumula":
                 trecho = f"Súmula {partes[2]} do {partes[1]}"
                 tipo = "jurisprudencia"
+            elif partes[0] == "tema":
+                trecho = f"Tema {partes[2]} do {partes[1]}"
+                tipo = "jurisprudencia"
             else:
                 trecho = f"art. {partes[2]} do {partes[1]}"
                 tipo = "lei"

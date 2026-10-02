@@ -53,15 +53,16 @@ resolve, e que o script trata de forma explícita:
    mostra acerto "perfeito" — é um voto de desconfiança deliberado na
    generalização para o conjunto oculto, que a contagem sozinha não capta.
 
-Quatro caminhos (`sumula_real`, `sumula_inventada`, `acordao_fts`, `tema`)
+Os caminhos de súmula, `acordao_fts` e, em bases antigas, os de tema
 nunca acumulam `--minimo-n` de forma confiável mesmo com corpus sintético
 grande, por razões estruturais que mais dado sintético não resolve:
 `acordao_fts` só existe quando o parser de cabeçalho falha — e o catálogo do
 gerador sintético é construído a partir do índice já parseado, então NUNCA
 inclui um registro sem cabeçalho parseável; `sumula_real`/`sumula_inventada`
 competem por um sorteio aleatório num universo de só 5 súmulas contra ~1000
-acórdãos; `tema` só existe nos documentos-base (o gerador não cria "tema"
-sintético), limitado a poucas variações de superfície. Os quatro valores no
+acórdãos. Bases canônicas que contenham registros com `natureza='tema'`
+também alimentam o corpus sintético; bases antigas, sem esses registros, não
+oferecem evidência para calibrar os caminhos de tema. Os valores no
 YAML para esses caminhos foram ajustados manualmente a partir de evidência
 real (não do corpus sintético circular), registrada como teste permanente em
 tests/test_cenarios.py:
@@ -77,14 +78,9 @@ tests/test_cenarios.py:
     encoding severa demais para o FTS indexar o número). O valor caiu de
     0,90 para 0,86 — a evidência real aponta pra esse caminho ser MENOS
     confiável do que o chute original assumia, não mais.
-  - `tema`: sem dado (o gerador sintético não produz "tema"), mas a lógica em
-    `Resolvedor.resolver_citacao` para essa família nunca retorna `real` —
-    por construção, qualquer citação de tema numerada e bem roteada só pode
-    virar `inventada` ou `incompleta` (convenção documentada no README: temas
-    não têm cobertura na base congelada). É uma garantia estrutural do
-    código, não uma frequência observada; por isso o ajuste é modesto (de
-    0,85 para 0,90, igualando aos outros caminhos "estruturalmente nunca
-    real" como lei_inventada/sumula_inventada), não um valor alto.
+  - caminhos de tema: mantêm valores conservadores até haver amostra
+    suficiente da nova base. Um tema agora pode ser `real`, `inventada` ou
+    `incompleta`, conforme a consulta ao índice canônico.
 
 Os 7 caminhos restantes (`lei_sem_artigo`, `lei_sem_estatuto`,
 `sumula_sem_numero`, `sumula_sem_tribunal`, `lei_ambigua`, `sumula_ambigua`,

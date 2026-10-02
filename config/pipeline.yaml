@@ -9,7 +9,9 @@
     "lei_sem_estatuto": 0.85, "sumula_real": 0.96, "sumula_inventada": 0.92,
     "sumula_sem_numero": 0.85, "sumula_sem_tribunal": 0.85,
     "lei_ambigua": 0.80, "sumula_ambigua": 0.80,
-    "tema": 0.90, "descritiva": 0.98, "acordao_indice": 0.98,
+    "tema": 0.90, "tema_real": 0.90, "tema_inventada": 0.90,
+    "tema_sem_numero": 0.85, "tema_ambigua": 0.80,
+    "descritiva": 0.98, "acordao_indice": 0.98,
     "acordao_fts": 0.86, "acordao_zero": 0.98, "acordao_ambigua": 0.80,
     "lei_existente_fora_da_base": 0.60
   },
