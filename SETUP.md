@@ -63,11 +63,12 @@ Docker acima continua sendo o formato de entrega da competição.
 $modelo = ".hf-cache\bertimbau-large-citacoes-juridicas"
 uv sync --locked --no-default-groups --group ml
 uv run --locked --no-default-groups --group ml --no-sync hf download giovannalavouras/bertimbau-large-citacoes-juridicas --revision 44697e852ef12493d0c9f560ad7da1e513dcdb35 --local-dir $modelo
-uv run --locked --no-default-groups --group ml --no-sync python src/pipeline.py --modelo-citacoes $modelo --dispositivo-modelo cuda
+uv run --locked --no-default-groups --group ml --no-sync python src/pipeline.py --modelo-citacoes $modelo --dispositivo-modelo auto
 ```
 
-Sem GPU, use `--dispositivo-modelo cpu`. O valor `auto` escolhe CUDA quando
-disponível e CPU nos demais casos.
+Localmente, `auto` prefere CUDA e recua para CPU. Use
+`--dispositivo-modelo cuda` para exigir GPU ou `--dispositivo-modelo cpu` para
+forçar a execução sem GPU.
 
 Acrescente `--avaliar` ao comando de `src/pipeline.py` para pontuar o fluxo
 híbrido localmente. O entrypoint Docker aceita somente os três argumentos
@@ -103,13 +104,13 @@ o Python 3.12 (fixado em `.python-version`) e as versões travadas no `uv.lock`.
 MODELO_LOCAL=".hf-cache/bertimbau-large-citacoes-juridicas"
 uv sync --locked --no-default-groups --group ml
 uv run --locked --no-default-groups --group ml --no-sync hf download giovannalavouras/bertimbau-large-citacoes-juridicas --revision 44697e852ef12493d0c9f560ad7da1e513dcdb35 --local-dir "$MODELO_LOCAL"
-uv run --locked --no-default-groups --group ml --no-sync python src/pipeline.py --modelo-citacoes "$MODELO_LOCAL" --dispositivo-modelo cuda
+uv run --locked --no-default-groups --group ml --no-sync python src/pipeline.py --modelo-citacoes "$MODELO_LOCAL" --dispositivo-modelo auto
 ```
 
 O download do modelo exige internet apenas na primeira execução. Depois disso,
-o caminho em `.hf-cache` é local. O comando acima exige GPU. Para executar a
-mesma composição híbrida em CPU, use `--dispositivo-modelo cpu`; `auto` escolhe
-CUDA quando disponível e recua para CPU.
+o caminho em `.hf-cache` é local. `auto` usa CUDA quando disponível e recua para
+CPU. Para tornar a escolha estrita, use `--dispositivo-modelo cuda` ou
+`--dispositivo-modelo cpu`.
 
 ### Baseline de regras
 

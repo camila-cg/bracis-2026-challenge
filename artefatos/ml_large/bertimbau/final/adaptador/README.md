@@ -58,19 +58,23 @@ calibradas de correção jurídica.
 
 ## Como usar
 
-Instale as dependências de ML indicadas em `requirements-ml.txt` e garanta que
-os pesos do modelo-base, na revisão fixada, estejam disponíveis no cache local.
-Na raiz do repositório, execute:
+Na raiz do repositório, instale o grupo ML travado pelo `uv.lock` e execute o
+pipeline. Garanta que os pesos do modelo-base, na revisão fixada, estejam
+disponíveis no cache local:
 
 ```bash
-PYTHONPATH=src python src/pipeline.py \
+uv sync --locked --no-default-groups --group ml
+uv run --locked --no-default-groups --group ml --no-sync python src/pipeline.py \
   --modelo-citacoes artefatos/ml_large/bertimbau/final \
+  --dispositivo-modelo auto \
   --limiar-lei 0.99 --limiar-jur 0.99
 ```
 
 O caminho fornecido ao pipeline é a pasta `final`, que reúne este adaptador, o
 tokenizer e o `manifesto.json`. Por padrão, o carregamento não baixa pesos da
-internet implicitamente.
+internet implicitamente. `auto` prefere CUDA e recua para CPU. Use
+`--dispositivo-modelo cuda` para exigir GPU ou `--dispositivo-modelo cpu` para
+forçar CPU.
 
 ## Dados de treinamento
 

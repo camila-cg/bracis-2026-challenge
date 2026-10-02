@@ -279,13 +279,13 @@ grupo ML, baixe uma vez a revisão fixada e informe a pasta ao pipeline:
 MODELO_LOCAL=".hf-cache/bertimbau-large-citacoes-juridicas"
 uv sync --locked --no-default-groups --group ml
 uv run --locked --no-default-groups --group ml --no-sync hf download giovannalavouras/bertimbau-large-citacoes-juridicas --revision 44697e852ef12493d0c9f560ad7da1e513dcdb35 --local-dir "$MODELO_LOCAL"
-uv run --locked --no-default-groups --group ml --no-sync python src/pipeline.py --modelo-citacoes "$MODELO_LOCAL" --dispositivo-modelo cuda
+uv run --locked --no-default-groups --group ml --no-sync python src/pipeline.py --modelo-citacoes "$MODELO_LOCAL" --dispositivo-modelo auto
 ```
 
-Para executar localmente sem GPU, troque o último argumento por
-`--dispositivo-modelo cpu`. O valor `auto` também é aceito e escolhe CUDA quando
-disponível, com fallback para CPU; os exemplos principais usam `cuda` para
-deixar explícito o contrato padrão.
+Na execução local, `auto` é o padrão: usa CUDA sempre que disponível e recua
+para CPU caso contrário. Use `--dispositivo-modelo cuda` para exigir uma GPU e
+falhar cedo se ela não estiver disponível, ou `--dispositivo-modelo cpu` para
+forçar a execução sem GPU. O Docker oficial continua exigindo CUDA por padrão.
 
 Essa forma também gera `saida/json/<documento_id>.json` e
 `saida/submission.csv`. Ela é útil para desenvolvimento e inspeção dos

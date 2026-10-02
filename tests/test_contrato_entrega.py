@@ -55,8 +55,21 @@ def test_readme_destaca_docker_e_tambem_expoe_execucao_local():
     assert "python src/pipeline.py --modelo-citacoes" in readme
     assert "docker run --rm --gpus all --network none" in readme
     assert "BRACIS_DISPOSITIVO=cpu" in readme
+    assert "--dispositivo-modelo auto" in readme
     assert "--dispositivo-modelo cuda" in readme
     assert "--dispositivo-modelo cpu" in readme
+
+    pipeline = _ler("src/pipeline.py")
+    assert 'choices=["auto", "cuda", "cpu"]' in pipeline
+    assert 'default="auto"' in pipeline
+
+
+def test_model_card_usa_ambiente_ml_travado_e_documenta_dispositivos():
+    model_card = _ler("artefatos/ml_large/bertimbau/final/adaptador/README.md")
+    assert "requirements-ml.txt" not in model_card
+    assert "uv sync --locked --no-default-groups --group ml" in model_card
+    for dispositivo in ("auto", "cuda", "cpu"):
+        assert f"--dispositivo-modelo {dispositivo}" in model_card
 
 
 def test_smoke_cpu_declara_dispositivo_explicitamente():
