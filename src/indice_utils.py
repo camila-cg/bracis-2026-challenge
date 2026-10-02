@@ -299,13 +299,74 @@ def construir_indice_acordaos(con: sqlite3.Connection) -> tuple[dict, list[dict]
 # Índice dos registros normativos (súmulas, temas + dispositivos de lei)
 # --------------------------------------------------------------------------- #
 
-# Estatuto de cada dispositivo mapeado à mão (o número de artigo sozinho não
-# basta, se repete entre códigos diferentes).
+# Fallback legado para registros antigos sem identidade do diploma no texto.
+# Registros novos são indexados pela identidade extraída do próprio conteúdo;
+# portanto, esta tabela não precisa crescer junto com a base.
 ESTATUTO_POR_ID = {int(chave): valor for chave, valor in carregar_config("diplomas")["estatuto_por_id"].items()}
 
 # O texto dos dispositivos abre com "Artigo 276 da Lei nº ..."; sem o "(?:igo)?"
 # o regex parava em "Art" + "igo" e nenhum dos 13 dispositivos entrava no índice.
 ARTIGO_INICIAL = re.compile(r"\s*Art(?:igo)?\.?\s*(\d[\d.]*)", re.I)
+
+# Identidade do ato no próprio registro canônico. Diferentemente de
+# ``ESTATUTO_POR_ID``, esta leitura continua válida quando a base recebe IDs e
+# dispositivos novos. O ano pode vir depois de barra ou por extenso
+# ("Lei nº 13.105, de 16 de março de 2015").
+ATO_NUMERADO_NO_TEXTO = re.compile(
+    r"\b(?P<especie>lei(?:\s+complementar)?|decreto\s*[-–]?\s*lei|decreto|"
+    r"resolu[çc][ãa]o|lc)"
+    r"(?:\s+(?-i:[A-ZÀ-Ý]{2,8})(?![A-Za-zÀ-ÿ]))?\s*"
+    r"(?:n(?:[uú]mero|[.º°o](?:\s*[º°o.])?)?\s*)?"
+    r"(?P<numero>\d(?:[\d.\s]*\d)?)",
+    re.I,
+)
+ANO_LEGAL_APOS_NUMERO = re.compile(
+    r"^\s*(?:/\s*(?P<barra>\d{2,4})|,?\s*de\b[^.;:\n]{0,60}?"
+    r"(?P<data>\b(?:19|20)\d{2}\b))",
+    re.I,
+)
+
+
+def _normalizar_ano_legal(ano: str | None) -> str | None:
+    if ano is None:
+        return None
+    if len(ano) == 2:
+        return ("19" if int(ano) >= 30 else "20") + ano
+    return ano
+
+
+def normalizar_especie_legal(especie: str) -> str:
+    sem_acento = unicodedata.normalize("NFKD", especie).encode("ascii", "ignore").decode()
+    compacta = re.sub(r"[\s–-]+", " ", sem_acento.lower()).strip()
+    return "lei complementar" if compacta == "lc" else compacta
+
+
+def identidade_legal_do_texto(texto: str) -> tuple[str, str, str | None] | None:
+    """Extrai ``(espécie, número, ano)`` de uma identidade legal numerada."""
+    identidade = ATO_NUMERADO_NO_TEXTO.search(texto[:500])
+    if identidade is None:
+        return None
+    numero = re.sub(r"\D", "", identidade.group("numero"))
+    ano_encontrado = ANO_LEGAL_APOS_NUMERO.match(texto[identidade.end():])
+    ano = None
+    if ano_encontrado:
+        ano = ano_encontrado.group("barra") or ano_encontrado.group("data")
+    especie = normalizar_especie_legal(identidade.group("especie"))
+    return especie, numero, _normalizar_ano_legal(ano)
+
+
+def especie_legal_do_texto(texto: str) -> str | None:
+    identidade = ATO_NUMERADO_NO_TEXTO.search(texto)
+    return (
+        normalizar_especie_legal(identidade.group("especie"))
+        if identidade else None
+    )
+
+
+def chave_lei_numerada(
+    especie: str, numero: str, ano: str | None, artigo: str,
+) -> str:
+    return f"lei_numero|{especie}|{numero}|{ano or ''}|{artigo}"
 
 # Súmulas do STJ citam o próprio número no fim do enunciado, tipo referência
 # bibliográfica: "(SÚMULA 83, CORTE ESPECIAL, julgado em ...)".
@@ -333,7 +394,8 @@ SUMULA_SEM_NUMERO_NO_TEXTO = {
 def construir_indice_normativos(con: sqlite3.Connection) -> tuple[dict, list[dict]]:
     """Índice de leis, súmulas e temas por sua identidade jurídica.
 
-    As chaves são ``lei|<estatuto>|<artigo>``,
+    As chaves são ``lei_numero|<espécie>|<número>|<ano>|<artigo>`` (preferencial),
+    ``lei|<estatuto>|<artigo>`` (fallback legado),
     ``sumula|<tribunal>|<número>`` e ``tema|<tribunal>|<número>``.
 
     Aqui a chave é semântica, não posicional: não existe cabeçalho nesses
@@ -349,12 +411,17 @@ def construir_indice_normativos(con: sqlite3.Connection) -> tuple[dict, list[dic
     for documento_id, id_canonico, natureza, tribunal, texto in cur:
         if natureza == "dispositivo":
             m = ARTIGO_INICIAL.match(texto)
+            identidade = identidade_legal_do_texto(texto)
             estatuto = ESTATUTO_POR_ID.get(id_canonico)
-            if not m or not estatuto:
+            if not m or (identidade is None and not estatuto):
                 sem_resolucao.append({"documento_id": documento_id, "id": id_canonico, "natureza": natureza})
                 continue
             artigo = m.group(1).replace(".", "")
-            chave = f"lei|{estatuto}|{artigo}"
+            if identidade is not None:
+                especie, numero, ano = identidade
+                chave = chave_lei_numerada(especie, numero, ano, artigo)
+            else:
+                chave = f"lei|{estatuto}|{artigo}"
         elif natureza == "sumula":
             m = SUMULA_NO_TEXTO.search(texto)
             if m:

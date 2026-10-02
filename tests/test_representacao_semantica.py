@@ -42,6 +42,11 @@ class DecisaoSemantica(unittest.TestCase):
         self.resolvedor.con = None
         self.resolvedor.normativos = {
             "lei|Código de Processo Civil|373": [{"id": 42}],
+            "lei_numero|lei|13105|2015|999": [{"id": 43}],
+            "lei_numero|lei|13709|2018|7": [{"id": 44}],
+            "lei_numero|lei|15999|2026|12": [{"id": 45}],
+            "lei_numero|lei|400|2021|2": [{"id": 46}],
+            "lei_numero|resolucao|400|2021|2": [{"id": 47}],
             "tema|STF|339": [{"id": 50}],
             "tema|STJ|1076": [{"id": 51}],
         }
@@ -57,7 +62,7 @@ class DecisaoSemantica(unittest.TestCase):
 
     def test_consulta_normativa_zero_um_e_insuficiente(self):
         real = self.resolvedor.resolver_citacao(citacao("art. 373 do CPC", "lei"))
-        zero = self.resolvedor.resolver_citacao(citacao("art. 999 do CPC", "lei"))
+        zero = self.resolvedor.resolver_citacao(citacao("art. 998 do CPC", "lei"))
         incompleta = self.resolvedor.resolver_citacao(citacao("art. 373", "lei"))
         self.assertEqual((real.classe, real.id_canonico, real.candidatos), ("real", 42, (42,)))
         self.assertEqual((zero.classe, zero.id_canonico), ("inventada", None))
@@ -94,6 +99,35 @@ class DecisaoSemantica(unittest.TestCase):
         resultado = self.resolvedor.resolver_citacao(citacao("art. 373 do CPC", "lei"))
         self.assertEqual((resultado.classe, resultado.candidatos), ("incompleta", (42, 43)))
 
+    def test_dispositivo_novo_resolve_sem_id_pre_configurado(self):
+        casos = (
+            ("art. 999 do CPC", 43),
+            ("art. 7º da LGPD", 44),
+            ("art. 12 da Lei nº 15.999/2026", 45),
+        )
+        for trecho, id_canonico in casos:
+            with self.subTest(trecho=trecho):
+                resultado = self.resolvedor.resolver_citacao(citacao(trecho, "lei"))
+                self.assertEqual((resultado.classe, resultado.id_canonico), ("real", id_canonico))
+
+    def test_lei_federal_desconhecida_consulta_base_antes_de_rejeitar(self):
+        nova = citacao("art. 12 da Lei nº 15.999/2026", "lei")
+        self.assertIsNone(nova.identidade_legal_valida)
+
+        ausente = citacao("art. 13 da Lei nº 15.999/2026", "lei")
+        resultado = self.resolvedor.resolver_citacao(ausente)
+        self.assertEqual(resultado.classe, "inventada")
+
+    def test_especie_do_ato_impede_colisao_de_numero_e_ano(self):
+        lei = self.resolvedor.resolver_citacao(
+            citacao("art. 2 da Lei nº 400/2021", "lei")
+        )
+        resolucao = self.resolvedor.resolver_citacao(
+            citacao("art. 2 da Resolução CNJ nº 400/2021", "lei")
+        )
+        self.assertEqual((lei.classe, lei.id_canonico), ("real", 46))
+        self.assertEqual((resolucao.classe, resolucao.id_canonico), ("real", 47))
+
     def test_tema_indexado_pode_ser_real(self):
         tema_stf = self.resolvedor.resolver_citacao(citacao("Tema 339/STF", "tema"))
         tema_stj = self.resolvedor.resolver_citacao(citacao("Tema 1.076 do STJ", "tema"))
@@ -121,12 +155,17 @@ class DecisaoSemantica(unittest.TestCase):
         con.executemany(
             "INSERT INTO documentos VALUES (?, ?, ?, ?, ?)",
             [
+                (
+                    "lei-nova-art-12", 69, "dispositivo", None,
+                    "Artigo 12 da Lei nº 15.999/2026\nArt. 12. Texto canônico.",
+                ),
                 ("tema-stf-339", 70, "tema", "STF", "Tema 339 - fundamentação"),
                 ("tema-stj-1076", 71, "tema", None, "Tema repetitivo 1.076 do STJ"),
             ],
         )
         indice, sem_resolucao = ind.construir_indice_normativos(con)
         self.assertEqual(sem_resolucao, [])
+        self.assertEqual(indice["lei_numero|lei|15999|2026|12"][0]["id"], 69)
         self.assertEqual(indice["tema|STF|339"][0]["id"], 70)
         self.assertEqual(indice["tema|STJ|1076"][0]["id"], 71)
 

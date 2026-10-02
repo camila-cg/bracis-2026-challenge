@@ -496,6 +496,10 @@ def _diploma_por_identidade(numero: str, ano: str | None) -> str | None:
     return next(iter(candidatos)) if len(candidatos) == 1 else None
 
 
+def _numero_de_lei_conhecido(numero: str) -> bool:
+    return any(numero == numero_canonico for numero_canonico, _ in _IDENTIDADES_NUMERADAS)
+
+
 def _dados_lei(trecho: str) -> tuple[str | None, str | None, str | None, bool | None, bool]:
     diploma_nomeado = _diploma(trecho)
     identidades = _identidades_lei(trecho)
@@ -503,19 +507,39 @@ def _dados_lei(trecho: str) -> tuple[str | None, str | None, str | None, bool | 
         apelido = None if diploma_nomeado else _identidade_por_apelido(trecho)
         if apelido:
             numero, ano = apelido
-            return None, numero, ano, False, True
+            # A identidade é suficiente para consultar uma base nova. Ela não
+            # é inválida só porque estava ausente do catálogo antigo.
+            return None, numero, ano, None, True
         return diploma_nomeado, None, None, None, False
 
-    diplomas_numerados = [
-        None if nao_federal else _diploma_por_identidade(numero, ano)
-        for numero, ano, nao_federal in identidades
-    ]
-    identidade_valida = (
-        all(diplomas_numerados)
-        and len(set(diplomas_numerados)) == 1
-        and (not diploma_nomeado or diploma_nomeado == diplomas_numerados[0])
-    )
-    diploma = diplomas_numerados[0] if identidade_valida else diploma_nomeado
+    diplomas_numerados = []
+    identidade_invalida = False
+    for numero, ano, nao_federal in identidades:
+        diploma = None if nao_federal else _diploma_por_identidade(numero, ano)
+        diplomas_numerados.append(diploma)
+        identidade_invalida |= nao_federal or (
+            _numero_de_lei_conhecido(numero) and diploma is None
+        )
+
+    diplomas_conhecidos = {diploma for diploma in diplomas_numerados if diploma}
+    if len(identidades) > 1 and (
+        None in diplomas_numerados or len(diplomas_conhecidos) != 1
+    ):
+        identidade_invalida = True
+    if diploma_nomeado and (
+        len(diplomas_conhecidos) != 1 or diploma_nomeado not in diplomas_conhecidos
+    ):
+        identidade_invalida = True
+
+    if identidade_invalida:
+        identidade_valida = False
+    elif len(diplomas_conhecidos) == 1:
+        identidade_valida = True
+    else:
+        # Lei federal ainda desconhecida pela configuração: a base canônica
+        # decide. ``None`` significa não verificada, não inválida.
+        identidade_valida = None
+    diploma = next(iter(diplomas_conhecidos), diploma_nomeado)
     numero, ano, _ = identidades[0]
     return diploma, numero, ano, identidade_valida, True
 
