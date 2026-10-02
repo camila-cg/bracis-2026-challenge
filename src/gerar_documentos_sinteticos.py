@@ -1,6 +1,5 @@
-"""Gera um corpus sintético auditável a partir dos documentos de desenvolvimento.
+"""Gera, por regras determinísticas, um corpus sintético auditável.
 
-O gerador é procedural e baseado em regras. Não chama LLM, API ou serviço externo.
 Cada documento derivado permanece no mesmo split do documento-base para evitar
 vazamento entre treino, validação e teste.
 """
@@ -22,7 +21,7 @@ from pathlib import Path
 import indice_utils as ind
 
 
-MODELO_GERADOR = "procedural-regras-v1 (sem LLM)"
+MODELO_GERADOR = "procedural-regras-v1"
 COLUNAS_GABARITO = (
     "nivel", "documento_id", "citacao_id", "inicio", "fim", "trecho",
     "tipo", "classificacao", "id_canonico",

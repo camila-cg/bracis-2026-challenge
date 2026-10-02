@@ -4,13 +4,13 @@ O repositório permite desenvolvimento local com **uv** ou **pip**, mas a entreg
 oficial do desafio é uma única imagem **Docker** com regras, SQLite e o detector
 BERTimbau. Execute os comandos na raiz do repositório.
 
-## Imagem Docker com BERTimbau Large (sem Ollama)
+## Imagem Docker com BERTimbau Large
 
 A imagem definida pelo único `Dockerfile` incorpora no build o modelo público
 `giovannalavouras/bertimbau-large-citacoes-juridicas`, fixado pela revisão
 `44697e852ef12493d0c9f560ad7da1e513dcdb35`. O contêiner não acessa a internet
-durante a execução e não depende de Ollama. O host precisa de GPU NVIDIA, driver
-compatível e NVIDIA Container Toolkit configurado.
+durante a execução. O host precisa de GPU NVIDIA, driver compatível e NVIDIA
+Container Toolkit configurado.
 
 ```powershell
 docker build -t bracis-2026 .
@@ -333,7 +333,3 @@ dois grupos. Esse fluxo requer GPU NVIDIA compatível com CUDA:
 ```bash
 uv sync --group ml --group llm
 ```
-
-O backend Ollama não precisa do grupo `llm`, pois o modelo roda no processo do
-Ollama. Ele ainda precisa do grupo `ml` quando o pipeline usa o detector BIO via
-`--modelo-citacoes`.

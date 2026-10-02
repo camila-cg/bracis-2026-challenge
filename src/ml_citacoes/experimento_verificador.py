@@ -14,13 +14,13 @@ from .experimento_bio import _metricas, validar_entrada
 from .fusao import fusionar
 from .inferencia import DetectorBIO
 from .metricas import avaliar_spans
-from .verificador_llm import PROMPT_SHA256, PROMPT_VERSAO, VerificadorLlama, VerificadorOllama
+from .verificador_llm import PROMPT_SHA256, PROMPT_VERSAO, VerificadorLlama
 from steps.extrair_candidatos import extrair
 from steps.filtrar_distratores import e_distrator, filtrar_distratores
 
 
 class _MedidorVRAM:
-    """Amostra a VRAM de todos os processos; inclui o servidor Ollama."""
+    """Amostra a VRAM de todos os processos durante o experimento."""
 
     def __init__(self, intervalo: float = 0.5):
         self.intervalo = intervalo
@@ -75,17 +75,12 @@ def executar(args, detector=None, verificador=None) -> dict:
             lote_janelas=args.lote_janelas_bio,
         )
     if verificador is None:
-        if args.modelo_ollama:
-            verificador = VerificadorOllama(
-                modelo=args.modelo_ollama, endpoint=args.endpoint_ollama,
-            )
-        else:
-            verificador = VerificadorLlama.de_modelo(
-                args.modelo_llm,
-                revisao=args.revisao_llm,
-                permitir_download=args.permitir_download_llm,
-                lote=args.lote_llm,
-            )
+        verificador = VerificadorLlama.de_modelo(
+            args.modelo_llm,
+            revisao=args.revisao_llm,
+            permitir_download=args.permitir_download_llm,
+            lote=args.lote_llm,
+        )
 
     torch = None
     try:
@@ -231,10 +226,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dados", type=Path, required=True)
     parser.add_argument("--execucao", type=Path, required=True)
-    grupo = parser.add_mutually_exclusive_group(required=True)
-    grupo.add_argument("--modelo-llm")
-    grupo.add_argument("--modelo-ollama")
-    parser.add_argument("--endpoint-ollama", default="http://127.0.0.1:11434")
+    parser.add_argument("--modelo-llm", required=True)
     parser.add_argument("--revisao-llm")
     parser.add_argument("--permitir-download-llm", action="store_true")
     parser.add_argument("--lote-llm", type=int, default=8)

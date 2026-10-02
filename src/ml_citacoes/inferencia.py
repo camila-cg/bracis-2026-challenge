@@ -32,7 +32,7 @@ class DetectorBIO:
     @classmethod
     def de_artefato(cls, pasta: Path, *, permitir_download: bool = False,
                    decodificador: str = "viterbi", lote_janelas: int = 8) -> "DetectorBIO":
-        # Política de inferência explícita; não reescreve pesos/manifestos históricos.
+        # A inferência carrega o artefato somente para leitura.
         if decodificador not in {"argmax", "viterbi"}:
             raise ValueError("decodificador deve ser argmax ou viterbi")
         try:
@@ -138,7 +138,7 @@ class DetectorBIO:
         return offsets, logits
 
     def decodificar(self, texto: str, offsets, logits, *, decodificador: str | None = None):
-        """Viterbi por padrão; argmax explícito preserva a comparação histórica."""
+        """Decodifica com Viterbi por padrão ou argmax quando solicitado."""
         decodificador = self.decodificador if decodificador is None else decodificador
         off_bruto, lab_bruto, score_bruto = combinar_logits_janelas(offsets, logits, decodificador="argmax")
         _, self.ultimo_diagnostico_bruto = bio_para_spans(lab_bruto, off_bruto, score_bruto)

@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import math
 from pathlib import Path
 from typing import Sequence
-from urllib.request import Request, urlopen
 
 from .contratos import ResultadoVerificacao
 
@@ -18,7 +16,6 @@ ROTULOS = {
     "C": "INCERTO",
     "D": "NAO_CITACAO",
 }
-MODELO_OLLAMA_PADRAO = "qwen3.6:latest"
 PROMPT_VERSAO = "zero_shot_v3_quatro_classes"
 
 PROMPT_SISTEMA = """Você é um especialista em direito brasileiro e deve classificar o trecho fornecido, sem tentar completar ou corrigir seu conteúdo.
@@ -185,65 +182,3 @@ class VerificadorLlama:
                 logits = self.modelo(**entradas).logits[:, -1, self.ids_rotulos].float().cpu().tolist()
             resultados.extend(_resultado_de_logits(item, modelo=self.nome_modelo) for item in logits)
         return resultados
-
-
-def _resultado_ollama(resposta: dict, *, modelo: str) -> ResultadoVerificacao:
-    """Converte os top-logprobs do primeiro token em probabilidades A/B/C/D."""
-    itens = resposta.get("logprobs") or []
-    if not itens:
-        raise RuntimeError("Ollama não retornou logprobs; atualize o Ollama")
-    primeiro = itens[0]
-    candidatos = [primeiro, *(primeiro.get("top_logprobs") or [])]
-    por_letra: dict[str, float] = {}
-    for item in candidatos:
-        token = str(item.get("token", "")).strip()
-        if token in ROTULOS and "logprob" in item:
-            por_letra[token] = max(por_letra.get(token, -math.inf), float(item["logprob"]))
-    ausentes = set(ROTULOS) - por_letra.keys()
-    if ausentes:
-        raise RuntimeError(
-            "Ollama não incluiu todos os rótulos em top_logprobs: " + ", ".join(sorted(ausentes))
-        )
-    return _resultado_de_logits([por_letra[letra] for letra in ROTULOS], modelo=modelo)
-
-
-class VerificadorOllama:
-    """Backend local do Ollama, sem geração livre além do primeiro token."""
-
-    def __init__(
-        self,
-        *,
-        modelo: str = MODELO_OLLAMA_PADRAO,
-        endpoint: str = "http://127.0.0.1:11434",
-        timeout: float = 120.0,
-    ):
-        self.modelo = modelo
-        self.endpoint = endpoint.rstrip("/")
-        self.timeout = timeout
-
-    def _chat(self, trecho: str) -> dict:
-        corpo = json.dumps({
-            "model": self.modelo,
-            "messages": VerificadorLlama._mensagens(trecho),
-            "stream": False,
-            "think": False,
-            "logprobs": True,
-            "top_logprobs": 20,
-            "keep_alive": "10m",
-            "options": {"temperature": 0, "num_predict": 1, "seed": 260926},
-        }).encode("utf-8")
-        requisicao = Request(
-            f"{self.endpoint}/api/chat", data=corpo,
-            headers={"Content-Type": "application/json"}, method="POST",
-        )
-        try:
-            with urlopen(requisicao, timeout=self.timeout) as resposta:
-                return json.loads(resposta.read().decode("utf-8"))
-        except Exception as exc:
-            raise RuntimeError(f"falha ao consultar Ollama em {self.endpoint}: {exc}") from exc
-
-    def classificar_muitos(self, trechos: Sequence[str]) -> list[ResultadoVerificacao]:
-        return [
-            _resultado_ollama(self._chat(trecho), modelo=f"ollama:{self.modelo}")
-            for trecho in trechos
-        ]

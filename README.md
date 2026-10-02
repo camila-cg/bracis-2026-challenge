@@ -209,9 +209,9 @@ Internamente, a etapa segue estes subpassos:
 ## Reprodução e submissão
 
 A entrega oficial combina as regras, consultas à base canônica SQLite e o
-detector BERTimbau treinado. A imagem usa GPU NVIDIA, não depende de Ollama e
-não acessa a internet durante a execução. O snapshot imutável do modelo é
-baixado durante o build e incorporado à própria imagem.
+detector BERTimbau treinado. A imagem usa GPU NVIDIA e executa offline. O
+snapshot imutável do modelo é baixado durante o build e incorporado à própria
+imagem.
 
 ### Ambiente
 
@@ -411,8 +411,8 @@ só um número de ato zerado continua `inventada`.
 Antes de filtrar candidatos, o pipeline identifica campos rotulados no início
 do documento, o processo principal e a transição para o corpo. O filtro remove
 spans contidos nesses campos, mesmo em cabeçalhos longos, e preserva referências
-feitas no corpo. `motivo_distrator` informa a razão de cada exclusão; o limite
-fixo de 400 caracteres não é mais usado.
+feitas no corpo. `motivo_distrator` informa a razão de cada exclusão, e a
+transição estrutural para o corpo define o alcance da análise do cabeçalho.
 
 ## Estrutura do repositório
 
@@ -431,8 +431,7 @@ saida/               JSONs, CSV e pacotes produzidos
 ```
 
 O pipeline oficial na imagem usa o fluxo híbrido de regras, SQLite e detector
-BERTimbau. Backends experimentais de verificação, inclusive Ollama, não fazem
-parte da execução entregue. As dependências ficam nos grupos `ml` e `llm` do
+BERTimbau. As dependências opcionais ficam nos grupos `ml` e `llm` do
 `pyproject.toml`, instalados com `uv`; consulte o
 [guia de setup](SETUP.md#8-extensões-opcionais-de-ml-e-llm).
 

@@ -284,17 +284,12 @@ def main() -> None:
         help="artefato local LoRA ou modelo mesclado; omitido mantém somente as regras",
     )
     parser.add_argument("--decodificador-bio", choices=["viterbi", "argmax"], default="viterbi",
-                        help="Viterbi padrão; argmax disponível para comparação histórica")
+                        help="Viterbi padrão; argmax disponível como alternativa")
     parser.add_argument("--lote-janelas-bio", type=int, default=8)
     parser.add_argument("--limiar-lei", type=float)
     parser.add_argument("--limiar-jur", type=float)
     parser.add_argument("--verificador-llm", type=str,
                         help="pasta local ou ID do Llama 3.1 8B Instruct quantizado em 4 bits")
-    parser.add_argument(
-        "--verificador-ollama",
-        help="modelo local do Ollama, recomendado: qwen3.6:latest",
-    )
-    parser.add_argument("--endpoint-ollama", default="http://127.0.0.1:11434")
     parser.add_argument("--revisao-verificador", help="revisão exata obrigatória para ID remoto")
     parser.add_argument("--permitir-download-verificador", action="store_true")
     parser.add_argument("--lote-verificador", type=int, default=8)
@@ -315,24 +310,16 @@ def main() -> None:
             lote_janelas=args.lote_janelas_bio,
         )
     verificador_citacoes = None
-    if args.verificador_llm is not None and args.verificador_ollama is not None:
-        sys.exit("use somente um backend de verificação")
-    if args.verificador_llm is not None or args.verificador_ollama is not None:
+    if args.verificador_llm is not None:
         if detector_bio is None:
             sys.exit("o verificador requer --modelo-citacoes")
-        if args.verificador_ollama is not None:
-            from ml_citacoes.verificador_llm import VerificadorOllama
-            verificador_citacoes = VerificadorOllama(
-                modelo=args.verificador_ollama, endpoint=args.endpoint_ollama,
-            )
-        else:
-            from ml_citacoes.verificador_llm import VerificadorLlama
-            verificador_citacoes = VerificadorLlama.de_modelo(
-                args.verificador_llm,
-                revisao=args.revisao_verificador,
-                permitir_download=args.permitir_download_verificador,
-                lote=args.lote_verificador,
-            )
+        from ml_citacoes.verificador_llm import VerificadorLlama
+        verificador_citacoes = VerificadorLlama.de_modelo(
+            args.verificador_llm,
+            revisao=args.revisao_verificador,
+            permitir_download=args.permitir_download_verificador,
+            lote=args.lote_verificador,
+        )
     if (args.limiar_lei is None) != (args.limiar_jur is None):
         sys.exit("informe os dois limiares ou omita ambos")
     limiares_modelo = None if args.limiar_lei is None else {

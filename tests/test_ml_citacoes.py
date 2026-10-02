@@ -534,11 +534,6 @@ class FusaoConservadora(unittest.TestCase):
 
 
 class VerificadorLLM(unittest.TestCase):
-    def test_qwen_e_o_modelo_ollama_padrao(self):
-        from ml_citacoes.verificador_llm import VerificadorOllama
-
-        self.assertEqual(VerificadorOllama().modelo, "qwen3.6:latest")
-
     def test_logits_restritos_geram_decisao_e_confianca(self):
         from ml_citacoes.verificador_llm import PROMPT_SHA256, PROMPT_VERSAO, _resultado_de_logits
 
@@ -557,27 +552,6 @@ class VerificadorLLM(unittest.TestCase):
         for valores in ([1, 2, 3], [1, float("nan"), 3, 4]):
             with self.assertRaises(ValueError):
                 _softmax_restrito(valores)
-
-    def test_resposta_ollama_usa_top_logprobs_das_quatro_classes(self):
-        from ml_citacoes.verificador_llm import _resultado_ollama
-
-        resposta = {"logprobs": [{
-            "token": " A", "logprob": -0.1,
-            "top_logprobs": [
-                {"token": " A", "logprob": -0.1},
-                {"token": " B", "logprob": -2.0},
-                {"token": " C", "logprob": -3.0},
-                {"token": " D", "logprob": -4.0},
-            ],
-        }]}
-        resultado = _resultado_ollama(resposta, modelo="ollama:teste")
-        self.assertEqual(resultado.decisao, "CITACAO_LEGISLACAO")
-        self.assertEqual(resultado.modelo, "ollama:teste")
-        with self.assertRaisesRegex(RuntimeError, "todos os rótulos"):
-            _resultado_ollama({"logprobs": [{
-                "token": " A", "logprob": -0.1, "top_logprobs": [],
-            }]}, modelo="x")
-
 
 class MetricasPorDocumento(unittest.TestCase):
     def test_offsets_iguais_em_documentos_diferentes_nao_casam(self):

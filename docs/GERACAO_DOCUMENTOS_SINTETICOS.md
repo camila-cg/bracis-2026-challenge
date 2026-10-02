@@ -4,9 +4,12 @@ O gerador cria documentos jurídicos sintéticos auditáveis a partir dos 26 arq
 
 ## Modelo usado
 
-O modelo é **`procedural-regras-v1 (sem LLM)`**. Trata-se de um gerador determinístico baseado em regras, não de um modelo de linguagem ou serviço de IA. Nenhuma API externa é chamada. A mesma entrada, versão do código e semente produzem a mesma saída.
+O corpus usa o gerador **`procedural-regras-v1`**, uma implementação procedural
+determinística baseada em regras. A mesma entrada, versão do código e semente
+produzem a mesma saída.
 
-Essa escolha permite calcular os spans durante a montagem, conhecer a origem de cada rótulo e auditar todas as transformações. Um LLM pode ser incorporado futuramente para variar a prosa, mas sua saída precisaria passar por outra etapa de validação e revisão humana.
+Essa abordagem permite calcular os spans durante a montagem, conhecer a origem
+de cada rótulo e auditar todas as transformações.
 
 ## Fontes e rótulos
 

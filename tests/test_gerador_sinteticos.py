@@ -27,8 +27,8 @@ class GeradorSinteticoTest(unittest.TestCase):
             "Súmula 83 do STJ", "jurisprudencia", "real", "123", "sumula|STJ|83",
         )]
 
-    def test_modelo_declara_que_nao_usa_llm(self):
-        self.assertIn("sem LLM", MODELO_GERADOR)
+    def test_modelo_identifica_o_gerador_procedural(self):
+        self.assertEqual(MODELO_GERADOR, "procedural-regras-v1")
 
     def test_split_e_deterministico_e_agrupado_por_origem(self):
         documentos = [f"doc_{indice:02d}" for indice in range(26)]
