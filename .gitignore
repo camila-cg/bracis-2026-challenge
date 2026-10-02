@@ -2,6 +2,7 @@ data/txt/
 data/desafio1_bracis.db
 
 __pycache__/
+.pytest_cache/
 .ipynb_checkpoints/
 .venv/
 .uv-cache/

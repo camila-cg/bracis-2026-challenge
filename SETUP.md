@@ -15,7 +15,8 @@ compatível e NVIDIA Container Toolkit configurado.
 ```powershell
 docker build -t bracis-2026 .
 
-docker run --rm --gpus all `
+New-Item -ItemType Directory -Force saida | Out-Null
+docker run --rm --gpus all --network none `
   -v "${PWD}/data:/entrada:ro" `
   -v "${PWD}/saida:/saida" `
   bracis-2026 `
@@ -29,7 +30,7 @@ precisa de internet, mas a imagem resultante é portável e executa offline.
 
 Comandos para PowerShell (Windows). As seções seguintes detalham cada etapa.
 
-### Sem Docker (requer git e [uv](https://docs.astral.sh/uv/getting-started/installation/))
+### Fluxo oficial com Docker e BERTimbau
 
 ```powershell
 # 1. entrar na pasta do repositório
@@ -38,40 +39,47 @@ cd bracis-2026-challenge
 # 2. copiar os dados recebidos por e-mail para data/ (ver seção 1):
 #    data\txt\*.txt, data\desafio1_bracis.db e, opcionalmente, data\goldenset_offsets.csv
 
-# 3. instalar as dependências
-uv sync --no-default-groups
-
-# 4. gerar as predições (saida\submission.csv)
-uv run --no-default-groups python src/pipeline.py
-
-# 5. validar e empacotar (saida\submissao_<commit>\)
-uv run --no-default-groups python src/empacotar_submissao.py
-```
-
-### Com Docker (requer Docker com GPU NVIDIA habilitada)
-
-```powershell
-# 1. entrar na pasta do repositório
-cd bracis-2026-challenge
-
-# 2. copiar os dados para data/, como acima
-
-# 3. construir a imagem (o ponto final é obrigatório)
+# 3. construir a imagem (requer internet; o ponto final é obrigatório)
 docker build -t bracis-2026 .
 
 # 4. gerar as predições (saida\submission.csv)
-docker run --rm --gpus all `
+New-Item -ItemType Directory -Force saida | Out-Null
+docker run --rm --gpus all --network none `
   -v "${PWD}/data:/entrada:ro" -v "${PWD}/saida:/saida" `
   bracis-2026 `
   /entrada/desafio1_bracis.db /entrada/txt /saida/submission.csv
 
-# 5. validar e empacotar (saida\submissao_<commit>\), fora do container
+# 5. validar e empacotar (saida\submissao_<commit>\), fora do contêiner
 python src/empacotar_submissao.py
 ```
 
-O passo 5 roda fora do container porque precisa do histórico do git, que não
-entra na imagem. O script usa só a biblioteca padrão do Python, então não é
-preciso instalar nenhuma dependência para ele.
+O passo 5 roda fora do contêiner porque precisa do histórico do Git, que não
+entra na imagem. O host precisa de Git e Python 3.10+; no Windows, `py -3` pode
+substituir `python`. O script usa só a biblioteca padrão, sem pacote adicional.
+
+### Execução local pelo script
+
+Este caminho executa a mesma composição de detector, regras e SQLite, mas o
+Docker acima continua sendo o formato de entrega da competição.
+
+```powershell
+$modelo = ".hf-cache\bertimbau-large-citacoes-juridicas"
+uv sync --locked --no-default-groups --group ml
+uv run --locked --no-default-groups --group ml --no-sync hf download giovannalavouras/bertimbau-large-citacoes-juridicas --revision 44697e852ef12493d0c9f560ad7da1e513dcdb35 --local-dir $modelo
+uv run --locked --no-default-groups --group ml --no-sync python src/pipeline.py --modelo-citacoes $modelo
+python src/empacotar_submissao.py
+```
+
+Acrescente `--avaliar` ao comando de `src/pipeline.py` para pontuar o fluxo
+híbrido localmente. O entrypoint Docker aceita somente os três argumentos
+posicionais e não executa a avaliação.
+
+Para a baseline leve de regras, sem o detector neural, use somente:
+
+```powershell
+uv sync --locked --no-default-groups
+uv run --locked --no-default-groups --no-sync python src/pipeline.py
+```
 
 ### Depois do passo 5
 
@@ -96,27 +104,42 @@ data/goldenset_offsets.csv   gabarito, necessário somente para --avaliar
 
 `data/json_to_submission.py` e `data/kaggle_metric.py` já vêm no repositório.
 
-## 2. Execução sem Docker
+## 2. Execução local pelo script
 
-### Com uv (recomendada)
+### Fluxo híbrido com uv
 
 Requer o [uv](https://docs.astral.sh/uv/getting-started/installation/). Ele instala
 o Python 3.12 (fixado em `.python-version`) e as versões travadas no `uv.lock`.
 
 ```bash
-uv sync --no-default-groups
-uv run --no-default-groups python src/pipeline.py
+MODELO_LOCAL=".hf-cache/bertimbau-large-citacoes-juridicas"
+uv sync --locked --no-default-groups --group ml
+uv run --locked --no-default-groups --group ml --no-sync hf download giovannalavouras/bertimbau-large-citacoes-juridicas --revision 44697e852ef12493d0c9f560ad7da1e513dcdb35 --local-dir "$MODELO_LOCAL"
+uv run --locked --no-default-groups --group ml --no-sync python src/pipeline.py --modelo-citacoes "$MODELO_LOCAL"
 ```
 
-`--no-default-groups` instala só o necessário para o pipeline (`pandas`), sem os
-grupos `dev` (pytest) e `notebooks` (Jupyter, matplotlib). Para desenvolver, use
-`uv sync` sem a flag, que instala também esses dois grupos (definidos em
-`default-groups` no `pyproject.toml`). Para rodar os testes e gates com o mínimo,
-veja a seção 6.
+O download do modelo exige internet apenas na primeira execução. Depois disso,
+o caminho em `.hf-cache` é local. O detector usa a GPU quando CUDA está
+disponível e recua para CPU caso contrário, com desempenho consideravelmente
+menor.
 
-### Com pip
+### Baseline de regras
+
+```bash
+uv sync --locked --no-default-groups
+uv run --locked --no-default-groups --no-sync python src/pipeline.py
+```
+
+Nesse caso, `--no-default-groups` instala só o necessário para as regras
+(`pandas`). A baseline não carrega o BERTimbau e não equivale à entrega oficial.
+Para desenvolver também com `pytest` e notebooks, use `uv sync` sem a flag; os
+grupos `dev` e `notebooks` estão em `default-groups` no `pyproject.toml`.
+
+### Com pip — baseline de regras
 
 Requer Python 3.10 ou superior.
+As versões em `requirements.txt` não são totalmente travadas; use `uv` quando
+precisar de um ambiente auditável.
 
 Windows (PowerShell):
 
@@ -134,7 +157,7 @@ python3 -m venv .venv
 .venv/bin/python src/pipeline.py
 ```
 
-## 3. Execução com Docker
+## 3. Execução oficial com Docker
 
 Requer Docker, GPU NVIDIA e o NVIDIA Container Toolkit (no Windows, Docker
 Desktop com backend WSL2). A imagem usa as versões do `uv.lock`. Os dados não
@@ -143,7 +166,8 @@ contêiner.
 
 ```bash
 docker build -t bracis-2026 .
-docker run --rm --gpus all \
+mkdir -p saida
+docker run --rm --gpus all --network none \
   -v "$PWD/data:/entrada:ro" -v "$PWD/saida:/saida" \
   bracis-2026 \
   /entrada/desafio1_bracis.db /entrada/txt /saida/submission.csv
@@ -153,24 +177,35 @@ No PowerShell:
 
 ```powershell
 docker build -t bracis-2026 .
-docker run --rm --gpus all `
+New-Item -ItemType Directory -Force saida | Out-Null
+docker run --rm --gpus all --network none `
   -v "${PWD}/data:/entrada:ro" -v "${PWD}/saida:/saida" `
   bracis-2026 `
   /entrada/desafio1_bracis.db /entrada/txt /saida/submission.csv
 ```
 
 A entrada recebe exatamente três argumentos posicionais: banco SQLite, pasta de
-TXT e arquivo CSV final.
+TXT e arquivo CSV final. Para persistir depois de `--rm`, o CSV precisa estar
+dentro do volume de saída montado, como `/saida/submission.csv` no exemplo.
 Só é preciso refazer o `docker build` quando o código ou as dependências mudarem.
+O modelo usado no build é
+`giovannalavouras/bertimbau-large-citacoes-juridicas`, na revisão imutável
+`44697e852ef12493d0c9f560ad7da1e513dcdb35`. O download ocorre apenas no build;
+o contêiner executa com acesso do Hugging Face desativado e pode ser iniciado
+com `--network none` depois de a imagem estar pronta.
 
 ## 4. Saídas e opções
 
-O pipeline grava:
+Na execução local, o pipeline grava:
 
 - `saida/json/<documento_id>.json`: um JSON por documento (contrato do desafio);
 - `saida/submission.csv`: o arquivo de submissão do Kaggle;
 - `outputs/extracao_<data>.csv`: um CSV de depuração da extração por execução, com os
   candidatos de cada documento. Não faz parte da submissão e fica fora do git.
+
+No contêiner oficial, o terceiro argumento é o único artefato persistido pelo
+comando documentado. Os JSONs, logs e diagnósticos ficam no filesystem temporário
+do contêiner; execute o pipeline localmente se precisar inspecioná-los.
 
 Opções de `src/pipeline.py`:
 
@@ -180,14 +215,17 @@ Opções de `src/pipeline.py`:
 | `--txt <pasta>` | pasta dos `.txt` (padrão `data/txt`) |
 | `--db <arquivo>` | base canônica (padrão `data/desafio1_bracis.db`) |
 | `--saida <pasta>` | pasta de saída (padrão `saida`) |
+| `--arquivo-saida <arquivo>` | caminho exato do CSV final; usado pelo wrapper Docker |
+| `--logs <pasta>` | pasta dos registros JSONL de erros recuperáveis |
 | `--goldenset <arquivo>` | gabarito usado por `--avaliar` |
+| `--modelo-citacoes <pasta>` | ativa um artefato local do detector BIO |
 
 ## 5. Submeter no Kaggle
 
 Com as mudanças commitadas, gere as saídas e depois rode:
 
 ```bash
-uv run python src/empacotar_submissao.py
+python src/empacotar_submissao.py
 ```
 
 O script valida o `saida/submission.csv` e cria `saida/submissao_<commit>/` com:
@@ -207,7 +245,7 @@ Instalação mínima (só `pandas` e `pytest`, o que os testes usam):
 
 ```bash
 uv sync --locked --no-default-groups --group dev
-uv run --locked --no-default-groups --group dev pytest -q
+uv run --locked --no-default-groups --group dev --no-sync pytest -q
 ```
 
 Com `uv sync --locked` sem as flags, o ambiente inclui também os notebooks, e basta
@@ -223,10 +261,10 @@ de reescrevê-lo em silêncio. Só rode `uv lock` ao mudar dependências, e comm
 
 Os testes e gates usam `data/desafio1_bracis.db` (e `data/txt` e
 `data/goldenset_offsets.csv` para `--avaliar`), que não vão no git: copie-os como na
-seção 1. Sem a base, os testes que dependem dela são **pulados**, não falham. Numa
-cópia limpa, sem dados, 167 testes passam e 57 são pulados; com os dados, todos
-passam. O dataset sintético do holdout, `datasets/dataset_citacoes_br_sintetico_2026_seed26092217.zip`,
-é versionado.
+seção 1. Sem a base, os testes que dependem dela são **pulados**, não falham; a
+quantidade exata varia à medida que a suíte evolui. O dataset sintético do
+holdout, `datasets/dataset_citacoes_br_sintetico_2026_seed26092217.zip`, é
+versionado.
 
 ### Gates de generalização
 
@@ -264,12 +302,12 @@ que o `--no-default-groups` das seções anteriores não instala.
 Com uv:
 
 ```bash
-uv sync
+uv sync --locked
 ```
 
 Com pip, o `requirements.txt` já inclui esses pacotes.
 
 No VS Code, selecione como kernel o Python do `.venv` do projeto. Se aparecer o aviso
 de que é preciso instalar `ipykernel` e `pip`, o ambiente foi criado com
-`--no-default-groups`: rode `uv sync` e reinicie o kernel. Os notebooks localizam a
+`--no-default-groups`: rode `uv sync --locked` e reinicie o kernel. Os notebooks localizam a
 raiz do projeto sozinhos, então podem ser abertos de qualquer pasta dentro do repositório.

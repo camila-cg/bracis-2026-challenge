@@ -13,10 +13,10 @@ A partir de documentos em texto, a solução precisa localizar cada citação,
 preservar seus offsets e verificar se os identificadores informados correspondem
 a um registro da base canônica.
 
-Este repositório implementa um pipeline determinístico, auditável e executável
-offline. O fluxo principal combina regras de extração e normalização com
-consultas a uma base SQLite. Com a mesma entrada e a mesma configuração, a saída
-gerada é sempre a mesma.
+Este repositório implementa um pipeline auditável e executável offline. O fluxo
+oficial combina um detector BERTimbau de revisão fixa com regras de extração e
+normalização e consultas a uma base SQLite. As dependências e os pesos ficam
+incorporados à imagem Docker; nenhum serviço remoto é usado durante a execução.
 
 ## Como a solução funciona
 
@@ -24,10 +24,15 @@ O pipeline separa a detecção textual da verificação jurídica. Primeiro enco
 trechos que podem representar citações; depois estrutura os identificadores de
 cada trecho e consulta a base canônica para decidir a classificação.
 
+Na imagem oficial, o detector BERTimbau propõe spans adicionais e suas
+predições são fusionadas de forma conservadora com os candidatos das regras.
+As regras são preservadas quando há concordância ou conflito e também servem de
+fallback se o detector não puder processar um documento.
+
 ```text
 documentos .txt
       ↓
-extração de candidatos
+detecção BERTimbau + extração por regras
       ↓
 filtro de metadados e distratores
       ↓
@@ -210,9 +215,13 @@ baixado durante o build e incorporado à própria imagem.
 
 ### Ambiente
 
-- Python 3.12 (fixado em `.python-version`; funciona a partir de 3.10);
-- [uv](https://docs.astral.sh/uv/) com `pyproject.toml` + `uv.lock` (versões travadas);
-  sem uv, use `requirements.txt` (ver [SETUP.md](SETUP.md)).
+- entrega oficial: Docker, GPU NVIDIA, driver compatível e NVIDIA Container
+  Toolkit;
+- execução local: Python 3.12 (fixado em `.python-version`; código compatível a
+  partir de 3.10) e [uv](https://docs.astral.sh/uv/) com `pyproject.toml` +
+  `uv.lock`;
+- `requirements.txt` é uma alternativa sem versões totalmente travadas para a
+  baseline de regras e notebooks, não para reproduzir a imagem oficial.
 
 ### Dados
 
@@ -226,15 +235,62 @@ data/goldenset_offsets.csv   gabarito (só para --avaliar)
 
 `data/json_to_submission.py` e `data/kaggle_metric.py` são os scripts oficiais do material.
 
-### Comando que reproduz as saídas
+### Execução oficial: Docker híbrido
+
+> **Caminho de entrega da competição:** construa e execute a imagem abaixo. Ela
+> reúne código, dependências e a revisão exata do modelo em um único artefato.
 
 ```bash
-uv sync --no-default-groups
-uv run --no-default-groups python src/pipeline.py
+docker build -t bracis-2026 .
+mkdir -p saida
+docker run --rm --gpus all --network none \
+  -v "$PWD/data:/entrada:ro" -v "$PWD/saida:/saida" \
+  bracis-2026 \
+  /entrada/desafio1_bracis.db /entrada/txt /saida/submission.csv
 ```
 
-Gera `saida/json/<documento_id>.json` (um por documento) e `saida/submission.csv`.
-Com `--avaliar`, também pontua contra o gabarito usando a métrica oficial.
+O entrypoint da imagem recebe, nessa ordem, o banco SQLite, a pasta de documentos
+TXT e o caminho exato do CSV de saída. Para o arquivo persistir após `--rm`, esse
+caminho deve ficar dentro do volume de saída — no exemplo, `/saida/`. O build
+precisa de internet para obter o
+snapshot fixado do modelo; a execução posterior usa `HF_HUB_OFFLINE=1`,
+`TRANSFORMERS_OFFLINE=1` e não acessa a rede. Consulte o comando equivalente
+para PowerShell e os pré-requisitos de GPU no [guia de setup](SETUP.md).
+
+### Execução local pelo script
+
+Para desenvolver fora do contêiner com a mesma composição híbrida, instale o
+grupo ML, baixe uma vez a revisão fixada e informe a pasta ao pipeline:
+
+```bash
+MODELO_LOCAL=".hf-cache/bertimbau-large-citacoes-juridicas"
+uv sync --locked --no-default-groups --group ml
+uv run --locked --no-default-groups --group ml --no-sync hf download giovannalavouras/bertimbau-large-citacoes-juridicas --revision 44697e852ef12493d0c9f560ad7da1e513dcdb35 --local-dir "$MODELO_LOCAL"
+uv run --locked --no-default-groups --group ml --no-sync python src/pipeline.py --modelo-citacoes "$MODELO_LOCAL"
+```
+
+Essa forma também gera `saida/json/<documento_id>.json` e
+`saida/submission.csv`. Ela é útil para desenvolvimento e inspeção dos
+diagnósticos, mas a imagem Docker continua sendo o artefato de entrega e o
+ambiente de reprodução da competição.
+
+Acrescente `--avaliar` ao último comando para pontuar o fluxo híbrido localmente.
+O wrapper Docker aceita somente os três argumentos posicionais e gera a
+submissão; ele não executa `--avaliar`.
+
+#### Baseline leve: CPU + regras
+
+Para desenvolvimento rápido, testes e depuração das regras, é possível executar
+sem o detector neural:
+
+```bash
+uv sync --locked --no-default-groups
+uv run --locked --no-default-groups --no-sync python src/pipeline.py
+```
+
+Esse comando **não reproduz a entrega híbrida oficial**, pois omite
+`--modelo-citacoes`. Com `--avaliar`, pontua a baseline contra o gabarito usando
+a métrica oficial.
 
 Falhas recuperáveis são isoladas por arquivo: o documento continua presente na
 saída com `citacoes: []`, enquanto os demais arquivos seguem normalmente. Erros
@@ -244,25 +300,18 @@ usam as regras determinísticas como fallback. Use `--logs <pasta>` para alterar
 o destino dos registros. Falhas globais, como banco ou configuração inválidos,
 continuam interrompendo a execução.
 
-**Execução oficial com Docker** (uma única imagem; os dados são montados, não
-copiados para ela):
-
-```bash
-docker build -t bracis-2026 .
-docker run --rm --gpus all \
-  -v "$PWD/data:/entrada:ro" -v "$PWD/saida:/saida" \
-  bracis-2026 \
-  /entrada/desafio1_bracis.db /entrada/txt /saida/submission.csv
-```
-
-A entrada única recebe, nessa ordem, o banco SQLite, a pasta de documentos TXT
-e o caminho exato do CSV de saída. No PowerShell, troque `$PWD` por `${PWD}`.
-O contêiner é executado com `HF_HUB_OFFLINE=1` e `TRANSFORMERS_OFFLINE=1`.
+No contêiner, somente o CSV informado no terceiro argumento é persistido pelo
+comando acima. JSONs de diagnóstico, logs e o CSV de extração ficam no espaço
+temporário do contêiner. A seção de saídas do [guia de setup](SETUP.md) explica
+como executar localmente quando esses artefatos também forem necessários.
 
 ### Submeter no Kaggle
 
+O empacotamento requer Git e Python 3.10+ no host, mesmo quando a predição foi
+gerada no Docker. No Windows, `py -3` pode substituir `python`.
+
 ```bash
-uv run python src/empacotar_submissao.py
+python src/empacotar_submissao.py
 ```
 
 Valida o `submission.csv` (cabeçalho, um `documento_id` por `.txt`, nenhuma célula
@@ -280,7 +329,7 @@ que de fato gerou as saídas.
 
 ```bash
 uv sync --locked --no-default-groups --group dev
-uv run --locked --no-default-groups --group dev pytest -q
+uv run --locked --no-default-groups --group dev --no-sync pytest -q
 ```
 
 Sem `data/desafio1_bracis.db`, os testes que dependem da base são pulados. A seção 6
