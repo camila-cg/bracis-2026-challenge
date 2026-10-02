@@ -1,10 +1,12 @@
-"""Avalia o holdout sintético em ZIP sem alterar o arquivo original.
+"""Avalia o corpus sintético versionado sem alterar o ZIP original.
 
 O dataset atual em ``datasets/`` contém 26 documentos e 71 anotações. Este
 módulo gera uma cópia compatível com a métrica oficial, executa o pipeline e
 produz duas leituras: o score oficial e um diagnóstico de FN, FP, classe e ID.
-O holdout existe porque o conjunto de desenvolvimento está saturado e já não
-distingue bem melhorias de regressões de generalização.
+Os 26 documentos também constam no treino do detector final. Portanto, este
+gate mede regressões das regras e do contrato de avaliação, mas não certifica
+generalização do modelo ou da fusão híbrida. Para isso, use ``gate_hibrido.py``
+com um corpus independente e manifestos de proveniência.
 
 Há duas camadas diferentes, que não devem ser confundidas:
 

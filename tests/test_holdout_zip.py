@@ -1,4 +1,4 @@
-"""Adaptação raw, curadoria e gate do holdout sintético em ZIP."""
+"""Adaptação raw, curadoria e regressão do corpus sintético em ZIP."""
 
 import contextlib
 import io
@@ -15,7 +15,7 @@ from validacao.teste_base_inteira import ids_duplicados
 
 # Pisos medidos em 30/09/2026 com o ZIP saneado (alusões removidas e reais sobre
 # duplicatas reclassificadas). Regrediu abaixo deles, a mudança piorou a
-# generalização. Melhorou: suba o piso na mesma mudança.
+# regressão neste corpus conhecido. Melhorou: suba o piso na mesma mudança.
 PISO_SCORE_FINAL = 0.977
 PISO_POR_NIVEL = {1: 1.007, 2: 0.962}
 
