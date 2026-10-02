@@ -130,6 +130,36 @@ class DecisaoSemantica(unittest.TestCase):
         self.assertEqual(indice["tema|STF|339"][0]["id"], 70)
         self.assertEqual(indice["tema|STJ|1076"][0]["id"], 71)
 
+    def test_indice_canonico_extrai_sumulas_do_titulo_sem_ids_fixos(self):
+        con = sqlite3.connect(":memory:")
+        con.execute(
+            "CREATE TABLE documentos (documento_id TEXT, id INTEGER, tribunal TEXT, "
+            "ano INTEGER, relator TEXT, natureza TEXT, tipo TEXT, texto TEXT, texto_len INTEGER)"
+        )
+        con.executemany(
+            "INSERT INTO documentos VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    "sumula-tst-999", 72, "TST", None, None, "sumula", "sumula",
+                    "Súmula n. 999\nEnunciado novo.", 30,
+                ),
+                (
+                    "sumula-vinculante-42", 73, "STF", None, None, "sumula", "sumula",
+                    "Súmula Vinculante nº 42 do STF\nEnunciado. (SÚMULA 42, STF)", 61,
+                ),
+            ],
+        )
+
+        indice, sem_resolucao = ind.construir_indice_normativos(con)
+
+        self.assertEqual(sem_resolucao, [])
+        self.assertEqual(indice["sumula|TST|999"][0]["id"], 72)
+        self.assertEqual(indice["sumula|STF|VINCULANTE-42"][0]["id"], 73)
+        self.assertNotIn("sumula|STF|42", indice)
+        resolvedor = Resolvedor(con)
+        self.assertEqual(resolvedor.sumula("Súmula 999 do TST")[:2], ("real", 72))
+        self.assertEqual(resolvedor.sumula("Súmula Vinculante 42")[:2], ("real", 73))
+
     def test_cobertura_explicita_para_lei_fora_do_catalogo(self):
         lei = self.resolvedor.resolver_citacao(citacao("art. 172 da Lei nº 9.504/1997", "lei"))
         self.assertEqual((lei.classe, lei.cobertura, lei.motivo),

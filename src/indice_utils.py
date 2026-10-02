@@ -307,8 +307,18 @@ ESTATUTO_POR_ID = {int(chave): valor for chave, valor in carregar_config("diplom
 # o regex parava em "Art" + "igo" e nenhum dos 13 dispositivos entrava no índice.
 ARTIGO_INICIAL = re.compile(r"\s*Art(?:igo)?\.?\s*(\d[\d.]*)", re.I)
 
-# Súmulas do STJ citam o próprio número no fim do enunciado, tipo referência
-# bibliográfica: "(SÚMULA 83, CORTE ESPECIAL, julgado em ...)".
+# O título preservado no início do texto é a fonte primária da identidade.
+# Aceita as formas usadas pelas bases canônicas, como "Súmula n. 331" e
+# "Súmula Vinculante nº 10", sem depender do id canônico do registro.
+SUMULA_NO_TITULO = re.compile(
+    r"\A\s*S[ÚU]MULA(?P<vinculante>\s+VINCULANTE)?\s*"
+    r"(?:N(?:(?:[ÚU]MERO)|(?:\s*\.?\s*[º°O]?))\s*)?"
+    r"(?P<numero>\d+(?:\.\d+)*)\b",
+    re.I | re.UNICODE,
+)
+
+# Fallback para súmulas do STJ que repetem o próprio número no fim do
+# enunciado, tipo referência bibliográfica: "(SÚMULA 83, CORTE ESPECIAL, ...)".
 SUMULA_NO_TEXTO = re.compile(r"S[ÚU]MULA\s+(\d+)", re.UNICODE)
 
 # A base de desenvolvimento original não continha temas, mas bases canônicas
@@ -322,8 +332,7 @@ TEMA_NO_TEXTO = re.compile(
 )
 TRIBUNAL_NO_TEXTO = re.compile(r"\b(STF|STJ|TST|TSE|STM)\b", re.I)
 
-# STF e TST não citam o próprio número em lugar nenhum do texto — identifiquei
-# comparando o enunciado com o texto oficial das duas súmulas.
+# Fallback legado para registros cujo título não esteja disponível ou legível.
 SUMULA_SEM_NUMERO_NO_TEXTO = {
     int(chave): tuple(valor)
     for chave, valor in carregar_config("diplomas")["sumula_sem_numero_no_texto"].items()
@@ -356,8 +365,15 @@ def construir_indice_normativos(con: sqlite3.Connection) -> tuple[dict, list[dic
             artigo = m.group(1).replace(".", "")
             chave = f"lei|{estatuto}|{artigo}"
         elif natureza == "sumula":
+            primeira_linha = next((linha.strip() for linha in texto.splitlines() if linha.strip()), "")
+            titulo = SUMULA_NO_TITULO.match(unicodedata.normalize("NFC", primeira_linha))
             m = SUMULA_NO_TEXTO.search(texto)
-            if m:
+            if titulo:
+                numero = normalizar_numero(titulo.group("numero"))
+                if titulo.group("vinculante"):
+                    tribunal = "STF"
+                    numero = f"VINCULANTE-{numero}"
+            elif m:
                 numero = m.group(1)
             elif id_canonico in SUMULA_SEM_NUMERO_NO_TEXTO:
                 tribunal, numero = SUMULA_SEM_NUMERO_NO_TEXTO[id_canonico]
