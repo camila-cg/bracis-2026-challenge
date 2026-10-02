@@ -301,6 +301,47 @@ A ordem de `classes_citadas` e `apelidos_estatuto` é significativa, pois a prim
 correspondência prevalece. Reavalie com `python src/pipeline.py --avaliar` após
 alterar os valores.
 
+### Calibração da confiança
+
+Os valores de `confianca` em `pipeline.yaml` não foram atribuídos caminho por
+caminho "no olho". A maioria vem de `src/calibrar_confianca.py`, que mede a taxa
+de acerto de cada caminho de decisão sobre um corpus sintético gerado a partir
+dos próprios documentos de desenvolvimento (`src/gerar_documentos_sinteticos.py`,
+8 modos de ruído de superfície) e aplica encolhimento Beta-Binomial usando o
+valor anterior como prior:
+
+```
+confianca = (acertos + prior × peso) / (n + peso)
+```
+
+Isso evita os dois erros óbvios: confiar só na contagem bruta (que infla
+caminhos raros, onde dois ou três acertos já viram 100%) e manter o chute
+original mesmo depois de observar dados. Antes de contar, as observações são
+deduplicadas por (caminho, trecho) — os 8 modos de transformação do gerador
+produzem variações do mesmo trecho-base, e sem isso um único acerto acabava
+contado várias vezes. Há também um teto de 0,98: o corpus sintético nasce do
+mesmo índice que o resolvedor consulta, então uma citação sintética "real"
+tende a ser mais fácil de acertar do que uma citação real do mundo, e o teto
+evita que essa folga vire confiança inflada na submissão. Rode
+`python src/calibrar_confianca.py --aplicar` depois de qualquer mudança de
+vocabulário ou regra de normalização para recalcular a tabela.
+
+Quatro caminhos (`lei_sem_artigo`, `lei_sem_estatuto`, `sumula_sem_numero`,
+`sumula_sem_tribunal`) ficam fixos em 0,85 por decisão manual, não calibração:
+o dev set tem poucos exemplos desses caminhos para confiar numa taxa medida, e
+a decisão em si é quase tautológica — se o artigo, o diploma, o número ou o
+tribunal realmente não aparecem no trecho, `incompleta` é praticamente a única
+resposta possível, não importa quantos exemplos já vimos. Já os caminhos de
+ambiguidade (`lei_ambigua`, `sumula_ambigua`, `acordao_ambigua`) ficam mais
+conservadores, em 0,80: ali a extração normalmente já reduziu a busca a um
+pequeno grupo de registros compatíveis, mas o desempate final é a parte do
+pipeline com menos cobertura de teste, e preferimos não reivindicar mais
+certeza do que temos sobre ele até medir com mais exemplos. `lei_existente_fora_da_base`
+(0,60) segue a mesma lógica: cobre leis conhecidas pelo nome (LGPD, ECA, CTN e
+afins) cujo artigo citado é plausível mas está fora do catálogo congelado, um
+limite onde a própria convenção de rotulagem é menos certa do que o restante
+do pipeline.
+
 ### Representação intermediária
 
 Depois de extrair um span, o pipeline constrói uma `CitacaoNormalizada` com
