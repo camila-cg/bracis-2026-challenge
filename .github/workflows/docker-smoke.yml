@@ -1,0 +1,74 @@
+name: Docker smoke
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/docker-smoke.yml
+      - .dockerignore
+      - Dockerfile
+      - run.sh
+      - pyproject.toml
+      - uv.lock
+      - config/**
+      - src/**
+      - data/json_to_submission.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reclaim ephemeral runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          df -h /
+
+      - name: Build image
+        run: docker build --progress=plain --tag bracis-2026:smoke .
+
+      - name: Check entrypoint contract
+        shell: bash
+        run: |
+          set +e
+          output="$(docker run --rm --network none bracis-2026:smoke 2>&1)"
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          test "$status" -eq 2
+          grep -Fq "uso: docker run" <<<"$output"
+
+      - name: Run offline end-to-end smoke test
+        shell: bash
+        run: |
+          fixture="$RUNNER_TEMP/bracis-smoke"
+          mkdir -p "$fixture/txt" "$fixture/out"
+          sqlite3 "$fixture/desafio.db" \
+            'CREATE TABLE documentos (documento_id TEXT, id INTEGER, tribunal TEXT, texto TEXT, texto_len INTEGER, natureza TEXT);'
+          printf '%s\n' \
+            'Texto de controle sem referencia juridica.' \
+            > "$fixture/txt/smoke.txt"
+
+          docker run --rm --network none \
+            -e CUDA_VISIBLE_DEVICES= \
+            -v "$fixture:/dados" \
+            bracis-2026:smoke \
+            /dados/desafio.db /dados/txt /dados/out/submission.csv
+
+          test -s "$fixture/out/submission.csv"
+          grep -Fq 'documento_id,citacoes' "$fixture/out/submission.csv"
+          grep -Fq 'smoke' "$fixture/out/submission.csv"
+
+      - name: Report image size
+        run: docker image inspect bracis-2026:smoke --format 'size_bytes={{.Size}}'

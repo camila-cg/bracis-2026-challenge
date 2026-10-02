@@ -19,7 +19,7 @@ ENV UV_LINK_MODE=copy \
     HF_HOME=/opt/huggingface-cache
 
 COPY pyproject.toml uv.lock .python-version ./
-RUN uv sync --locked --no-default-groups --group ml --no-install-project
+RUN uv sync --locked --no-default-groups --group ml --no-install-project --no-cache
 
 ARG HF_MODEL=giovannalavouras/bertimbau-large-citacoes-juridicas
 ARG HF_REVISION=44697e852ef12493d0c9f560ad7da1e513dcdb35
