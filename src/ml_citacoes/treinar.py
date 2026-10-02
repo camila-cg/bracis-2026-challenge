@@ -30,7 +30,10 @@ def _dependencias():
             set_seed,
         )
     except ImportError as exc:
-        raise RuntimeError("treino requer o grupo ml; execute: uv sync --group ml") from exc
+        raise RuntimeError(
+            "treino requer o grupo ml; execute uv sync --group ml "
+            "ou pip install -r requirements.txt"
+        ) from exc
     return locals()
 
 

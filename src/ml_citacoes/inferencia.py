@@ -40,7 +40,8 @@ class DetectorBIO:
             from transformers import AutoModelForTokenClassification, AutoTokenizer
         except ImportError as exc:
             raise RuntimeError(
-                "inferência BIO requer o grupo ml; execute: uv sync --group ml"
+                "inferência BIO requer o grupo ml; execute uv sync --group ml "
+                "ou pip install -r requirements.txt"
             ) from exc
         pasta = Path(pasta)
         manifesto_path = pasta / "manifesto.json"
@@ -68,7 +69,8 @@ class DetectorBIO:
                 from peft import PeftModel
             except ImportError as exc:
                 raise RuntimeError(
-                    "artefato LoRA requer o grupo ml; execute: uv sync --group ml"
+                    "artefato LoRA requer o grupo ml; execute uv sync --group ml "
+                    "ou pip install -r requirements.txt"
                 ) from exc
             modelo = PeftModel.from_pretrained(base, pasta / "adaptador")
             max_length = int(manifesto.get("max_length", 512))

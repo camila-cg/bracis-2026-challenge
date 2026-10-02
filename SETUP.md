@@ -136,11 +136,13 @@ Para desenvolver também com `pytest` e notebooks, use `uv sync --locked` sem
 `--no-default-groups`; os grupos `dev` e `notebooks` estão em `default-groups`
 no `pyproject.toml`.
 
-### Com pip — baseline de regras
+### Com pip — ambiente completo
 
 Requer Python 3.10 ou superior.
-As versões em `requirements.txt` não são totalmente travadas; use `uv` quando
-precisar de um ambiente auditável.
+O `requirements.txt` reúne pipeline, testes, notebooks e extensões de ML/LLM.
+As versões não são totalmente travadas e os índices CUDA por plataforma não são
+reproduzidos; use `uv` quando precisar de um ambiente auditável ou da seleção
+correta da distribuição do PyTorch.
 
 Windows (PowerShell):
 
@@ -306,9 +308,8 @@ Com uv:
 uv sync --locked
 ```
 
-O `requirements.txt` é apenas o fallback mínimo do pipeline padrão e não inclui
-as ferramentas de notebooks. Para trabalhar com os notebooks, use o fluxo com
-`uv`, que mantém as versões no `uv.lock`.
+Com `pip`, o `requirements.txt` completo também inclui essas ferramentas. O fluxo
+com `uv` é recomendado porque mantém as versões no `uv.lock`.
 
 No VS Code, selecione como kernel o Python do `.venv` do projeto. Se aparecer o aviso
 de que é preciso instalar `ipykernel` e `pip`, o ambiente foi criado com
@@ -317,9 +318,10 @@ raiz do projeto sozinhos, então podem ser abertos de qualquer pasta dentro do r
 
 ## 8. Extensões opcionais de ML e LLM
 
-As dependências experimentais são mantidas como grupos no `pyproject.toml`; não
-há arquivos `requirements` separados para elas. Para treinar ou executar o
-detector BIO/BERTimbau, instale o grupo `ml`:
+As dependências experimentais são mantidas como grupos no `pyproject.toml` e
+também consolidadas no `requirements.txt`; não há arquivos `requirements`
+separados para elas. Com `uv`, instale somente o grupo necessário. Para treinar
+ou executar o detector BIO/BERTimbau:
 
 ```bash
 uv sync --group ml

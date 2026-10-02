@@ -1,3 +1,19 @@
-# Fallback mínimo para executar o pipeline padrão com pip.
-# A fonte oficial das dependências é pyproject.toml + uv.lock.
+# Ambiente completo para quem usa pip.
+# Para versões travadas e índices CUDA por plataforma, use pyproject.toml + uv.lock.
 pandas
+pytest>=9.1.1
+
+# notebooks de análise (notebooks/*.ipynb)
+ipykernel
+jupyterlab
+matplotlib
+
+# detector BIO/BERTimbau e treino LoRA
+numpy>=1.26,<3
+torch>=2.2,<3
+transformers>=4.45,<5
+peft>=0.13,<1
+accelerate>=1,<2
+
+# verificador Llama local quantizado
+bitsandbytes>=0.43,<1

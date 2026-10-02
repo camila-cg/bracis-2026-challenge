@@ -220,9 +220,9 @@ baixado durante o build e incorporado à própria imagem.
 - execução local: Python 3.12 (fixado em `.python-version`; código compatível a
   partir de 3.10) e [uv](https://docs.astral.sh/uv/) com `pyproject.toml` +
   `uv.lock`;
-- `requirements.txt` é uma alternativa sem versões totalmente travadas para a
-  baseline de regras, não para notebooks nem para reproduzir a imagem oficial
-  (ver [SETUP.md](SETUP.md)).
+- `requirements.txt` reúne o ambiente completo — pipeline, testes, notebooks,
+  ML e LLM — para quem usa `pip`, mas não reproduz o travamento nem os índices
+  CUDA por plataforma usados na imagem oficial (ver [SETUP.md](SETUP.md)).
 
 ### Dados
 
