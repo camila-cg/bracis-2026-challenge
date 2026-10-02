@@ -69,7 +69,7 @@ jobs:
 
           test -s "$fixture/out/submission.csv"
           grep -Fq 'documento_id,citacoes' "$fixture/out/submission.csv"
-          grep -Fxq 'smoke,-' "$fixture/out/submission.csv"
+          tr -d '\r' < "$fixture/out/submission.csv" | grep -Fxq 'smoke,-'
 
       - name: Report image size
         run: docker image inspect bracis-2026:smoke --format 'size_bytes={{.Size}}'
