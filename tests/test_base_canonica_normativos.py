@@ -9,7 +9,7 @@ RAIZ = Path(__file__).resolve().parents[1]
 
 import indice_utils as ind
 
-QUANTIDADE_DISPOSITIVOS = 13
+MINIMO_DISPOSITIVOS = 13
 QUANTIDADE_SUMULAS = 5
 
 
@@ -35,7 +35,7 @@ class BaseCanonicaNormativos(unittest.TestCase):
             natureza: sum(registro[2] == natureza for registro in self.registros)
             for natureza in ("dispositivo", "sumula", "tema")
         }
-        self.assertEqual(por_natureza["dispositivo"], QUANTIDADE_DISPOSITIVOS)
+        self.assertGreaterEqual(por_natureza["dispositivo"], MINIMO_DISPOSITIVOS)
         self.assertEqual(por_natureza["sumula"], QUANTIDADE_SUMULAS)
 
     def test_dispositivo_tem_titulo_e_artigo_legiveis(self):
@@ -68,17 +68,23 @@ class BaseCanonicaNormativos(unittest.TestCase):
         quantidade_temas = sum(
             registro[2] == "tema" for registro in self.registros
         )
+        quantidade_dispositivos = sum(
+            registro[2] == "dispositivo" for registro in self.registros
+        )
 
         self.assertEqual(sem_resolucao, [])
         self.assertEqual(
             len(indice),
-            QUANTIDADE_DISPOSITIVOS + QUANTIDADE_SUMULAS + quantidade_temas,
+            quantidade_dispositivos + QUANTIDADE_SUMULAS + quantidade_temas,
         )
         self.assertEqual(sum(map(len, indice.values())), len(self.registros))
         self.assertTrue(all(len(registros) == 1 for registros in indice.values()))
         self.assertEqual(
-            sum(chave.startswith("lei|") for chave in indice),
-            QUANTIDADE_DISPOSITIVOS,
+            sum(
+                chave.startswith(("lei|", "lei_numero|"))
+                for chave in indice
+            ),
+            quantidade_dispositivos,
         )
         self.assertEqual(
             sum(chave.startswith("sumula|") for chave in indice),

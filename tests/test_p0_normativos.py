@@ -232,7 +232,9 @@ class IdentidadeLegalEstruturada(unittest.TestCase):
         self.assertFalse(fraca.contexto_legal_forte)
         self.assertEqual(self.resolvedor.resolver_citacao(fraca).classe, "incompleta")
         self.assertTrue(forte.contexto_legal_forte)
-        self.assertEqual(self.resolvedor.resolver_citacao(forte).classe, "inventada")
+        # Um nome ausente da configuração não prova que o diploma inexiste
+        # numa base canônica posterior; sem identidade consultável, é incompleta.
+        self.assertEqual(self.resolvedor.resolver_citacao(forte).classe, "incompleta")
 
     def test_pipeline_inclui_nome_de_lei_no_span_com_artigo(self):
         banco = Path(__file__).resolve().parents[1] / "data" / "desafio1_bracis.db"
@@ -247,7 +249,7 @@ class IdentidadeLegalEstruturada(unittest.TestCase):
                     self.assertEqual(len(documento["citacoes"]), 1)
                     citacao = documento["citacoes"][0]
                     self.assertEqual(citacao["trecho"], f"art. 1 da Lei de {nome}")
-                    self.assertEqual(citacao["classificacao"], "inventada")
+                    self.assertEqual(citacao["classificacao"], "incompleta")
 
     def test_pipeline_inclui_nome_composto_sem_engolir_a_prosa(self):
         banco = Path(__file__).resolve().parents[1] / "data" / "desafio1_bracis.db"
@@ -269,7 +271,7 @@ class IdentidadeLegalEstruturada(unittest.TestCase):
                 (
                     "O art. 1 da Lei de Murphy. Aplica-se a regra.",
                     "art. 1 da Lei de Murphy",
-                    "inventada",
+                    "incompleta",
                 ),
             ):
                 with self.subTest(texto=texto):

@@ -122,13 +122,19 @@ def carregar_catalogo(base: Path) -> tuple[list[Referencia], set[str], set[int]]
         for chave, registros in normativos.items():
             if len(registros) != 1:
                 continue
-            partes = chave.split("|", 2)
+            partes = chave.split("|")
             if partes[0] == "sumula":
                 trecho = f"Súmula {partes[2]} do {partes[1]}"
                 tipo = "jurisprudencia"
             elif partes[0] == "tema":
                 trecho = f"Tema {partes[2]} do {partes[1]}"
                 tipo = "jurisprudencia"
+            elif partes[0] == "lei_numero":
+                especie = partes[1].title()
+                numero = _formatar_numero(partes[2])
+                identidade = f"{especie} nº {numero}" + (f"/{partes[3]}" if partes[3] else "")
+                trecho = f"art. {partes[4]} da {identidade}"
+                tipo = "lei"
             else:
                 trecho = f"art. {partes[2]} do {partes[1]}"
                 tipo = "lei"

@@ -144,8 +144,10 @@ Internamente, a etapa segue estes subpassos:
 
 1. **Preparação dos índices:** carrega acórdãos e atos normativos da base e cria
    mapas por número, identidade jurídica e metadados verificáveis.
-2. **Consulta específica por família:** leis são buscadas por diploma e artigo;
-   súmulas, por tribunal e número; acórdãos, por número e qualificadores.
+2. **Consulta específica por família:** leis são buscadas prioritariamente
+   pelo número, ano e artigo extraídos do próprio registro canônico (com o
+   mapeamento legado por ID apenas como fallback); súmulas, por tribunal e número;
+   acórdãos, por número e qualificadores.
 3. **Validação de identidade:** rejeita qualificadores incompatíveis, números
    malformados e combinações que contradizem os dados da base.
 4. **Fallback controlado:** quando o índice estruturado de acórdãos não resolve,

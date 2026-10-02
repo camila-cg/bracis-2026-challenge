@@ -18,10 +18,16 @@ from steps.rotear_citacao import ROTA_ACORDAO, ROTA_DESCRITIVA, ROTA_LEI, ROTA_S
 # lei vai até o 107) não existe em lugar nenhum e mantém ``lei_inventada``.
 # Artigo com letra (``57-K``) não é verificável pelo último número e também
 # mantém ``lei_inventada``.
+_CONFIG_DIPLOMAS = carregar_config("diplomas")
 _ULTIMO_ARTIGO_FORA_DA_BASE = {
     tuple(chave.split("/", 1)): ultimo
-    for chave, ultimo in carregar_config("diplomas")["ultimo_artigo_fora_da_base"].items()
+    for chave, ultimo in _CONFIG_DIPLOMAS["ultimo_artigo_fora_da_base"].items()
 }
+_IDENTIDADES_POR_DIPLOMA: dict[str, set[tuple[str, str]]] = {}
+for _identidade, _diploma in _CONFIG_DIPLOMAS["identidade_numerada_estatuto"].items():
+    _IDENTIDADES_POR_DIPLOMA.setdefault(_diploma, set()).add(
+        tuple(_identidade.split("/", 1))
+    )
 
 
 def _caminho_lei_fora_da_base(citacao: CitacaoNormalizada) -> str:
@@ -70,27 +76,26 @@ class Resolvedor:
                     "inventada", None, _caminho_lei_fora_da_base(citacao), cobertura="fora_base",
                     motivo="lei_numerada_sem_mapeamento",
                 )
-            if not citacao.diploma and citacao.lei_nomeada and citacao.contexto_legal_forte:
-                return ResultadoResolucao(
-                    "inventada", None, "lei_inventada", cobertura="fora_base",
-                    motivo="diploma_nomeado_sem_mapeamento",
-                )
+            alvo = self._buscar_dispositivo(citacao, citacao.artigo)
+            if alvo:
+                # Em ``arts. 5º e 7º`` o id é o do primeiro artigo, mas um
+                # artigo coordenado inexistente é identificador explícito inválido.
+                if any(
+                    not self._buscar_dispositivo(citacao, artigo)
+                    for artigo in citacao.artigos_coordenados
+                ):
+                    return ResultadoResolucao(
+                        "inventada", None, "lei_inventada",
+                        motivo="artigo_coordenado_inexistente",
+                    )
+                return self._resultado_normativo(alvo, "lei")
             if not citacao.diploma:
                 if citacao.lei_numerada:
-                    # Convenção do desafio: lei numerada fora do catálogo congelado.
+                    # A identidade foi consultada dinamicamente; ausência agora
+                    # significa que não há registro compatível na base recebida.
                     return ResultadoResolucao("inventada", None, _caminho_lei_fora_da_base(citacao), cobertura="fora_base", motivo="lei_numerada_sem_mapeamento")
                 return ResultadoResolucao("incompleta", None, "lei_sem_estatuto", cobertura="nao_consultada", motivo="diploma_ausente")
-            alvo = self.normativos.get(f"lei|{citacao.diploma}|{citacao.artigo}")
-            # Em ``arts. 5º e 7º`` o id é o do primeiro artigo, mas um artigo
-            # coordenado inexistente é identificador explícito inválido.
-            if alvo and any(
-                not self.normativos.get(f"lei|{citacao.diploma}|{artigo}")
-                for artigo in citacao.artigos_coordenados
-            ):
-                return ResultadoResolucao(
-                    "inventada", None, "lei_inventada", motivo="artigo_coordenado_inexistente",
-                )
-            return self._resultado_normativo(alvo, "lei")
+            return self._resultado_normativo([], "lei")
 
         if citacao.qualificador_invalido and citacao.numero:
             caminho = {
@@ -183,6 +188,44 @@ class Resolvedor:
         if ids:
             return ResultadoResolucao("incompleta", None, f"{familia}_ambigua", ids, motivo="multiplos_registros")
         return ResultadoResolucao("inventada", None, f"{familia}_inventada")
+
+    def _buscar_dispositivo(
+        self, citacao: CitacaoNormalizada, artigo: str,
+    ) -> list[dict]:
+        """Consulta primeiro a identidade extraída, com fallback para o nome legado."""
+        identidades = []
+        if citacao.numero_lei:
+            identidades.append((citacao.numero_lei, citacao.ano_lei))
+        elif citacao.diploma:
+            candidatas = _IDENTIDADES_POR_DIPLOMA.get(citacao.diploma, set())
+            if len(candidatas) == 1:
+                identidades.extend(candidatas)
+
+        alvos = []
+        especie = ind.especie_legal_do_texto(citacao.trecho)
+        for numero, ano in identidades:
+            if especie and ano:
+                alvos.extend(self.normativos.get(
+                    ind.chave_lei_numerada(especie, numero, ano, artigo), []
+                ))
+            else:
+                alvos.extend(
+                    registro
+                    for chave, registros in self.normativos.items()
+                    if chave.startswith("lei_numero|")
+                    for _, especie_indice, numero_indice, ano_indice, artigo_indice
+                    in [chave.split("|", 4)]
+                    if numero_indice == numero
+                    and artigo_indice == artigo
+                    and (especie is None or especie_indice == especie)
+                    and (ano is None or ano_indice == ano)
+                    for registro in registros
+                )
+        if citacao.diploma:
+            alvos.extend(self.normativos.get(
+                f"lei|{citacao.diploma}|{artigo}", []
+            ))
+        return alvos
 
     def _buscar_acordaos(self, citacao: CitacaoNormalizada) -> set[int]:
         registros = self.acordaos_por_numero.get(citacao.numero or "", [])
